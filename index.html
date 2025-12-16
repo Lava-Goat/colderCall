@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>colderCall</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Random cold-calling helper</p>
+      <h1>colderCall</h1>
+      <p class="lede">Upload a roster, randomize calls with or without replacement, track outcomes, and export your period notes.</p>
+      <p id="serverStatus" class="pill muted">Not saved to server</p>
+      <p id="cycleInfo" class="pill info">Cycle 1</p>
+    </div>
+    <div class="actions-row">
+      <button id="exportCsv" class="ghost">Export CSV</button>
+      <button id="saveServer" class="primary">Save to server</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Roster & setup</h2>
+        <label class="toggle">
+          <input type="checkbox" id="withReplacement">
+          <span>Allow repeats</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="rosterUpload">Upload roster (CSV)</label>
+        <input type="file" id="rosterUpload" accept=".csv,text/csv">
+        <p class="helper">Headers optional. Recognizes first/last/full name columns.</p>
+      </div>
+
+      <div class="field-inline">
+        <div class="field">
+          <label for="defaultClassName">Default class name</label>
+          <input type="text" id="defaultClassName" placeholder="e.g., Algebra II">
+        </div>
+        <div class="field">
+          <label for="defaultPeriod">Default period</label>
+          <input type="text" id="defaultPeriod" placeholder="e.g., 2">
+        </div>
+      </div>
+
+      <div class="field-inline">
+        <div class="field">
+          <label for="classroomCourseId">Google Classroom course ID</label>
+          <input type="text" id="classroomCourseId" placeholder="course id">
+        </div>
+        <div class="field">
+          <label for="classroomToken">OAuth access token</label>
+          <input type="password" id="classroomToken" placeholder="ya29...">
+        </div>
+        <button id="classroomApiImport" class="ghost">Import via Classroom API</button>
+      </div>
+
+      <div class="field-inline">
+        <div class="field">
+          <label for="firstNameInput">Add student</label>
+          <input type="text" id="firstNameInput" placeholder="First name">
+        </div>
+        <div class="field">
+          <label for="lastNameInput" class="sr-only">Last name</label>
+          <input type="text" id="lastNameInput" placeholder="Last name">
+        </div>
+        <div class="field">
+          <label for="classNameInput" class="sr-only">Class</label>
+          <input type="text" id="classNameInput" placeholder="Class name">
+        </div>
+        <div class="field">
+          <label for="periodInput" class="sr-only">Period</label>
+          <input type="text" id="periodInput" placeholder="Period">
+        </div>
+        <button id="addStudent" class="ghost">Add</button>
+      </div>
+
+      <div class="field">
+        <label for="displayMode">Name display</label>
+        <select id="displayMode">
+          <option value="full">Full name</option>
+          <option value="first">First name only</option>
+          <option value="last">Last name only</option>
+          <option value="firstLastInitial">First + last initial</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="memo">Memo for this cycle</label>
+        <textarea id="memo" rows="3" placeholder="What are you asking about today?"></textarea>
+        <label class="toggle">
+          <input type="checkbox" id="carryMemo">
+          <span>Keep memo when starting next cycle</span>
+        </label>
+        <p class="helper">Each cycle keeps its own memo; when you reset, you can keep or clear it.</p>
+      </div>
+
+      <div class="field-inline">
+        <button id="resetCycle" class="ghost">Reset cycle</button>
+        <button id="clearRoster" class="ghost danger">Clear roster</button>
+      </div>
+    </section>
+
+    <section class="panel pick-panel">
+      <div class="panel-header">
+        <h2>Pick & record</h2>
+        <span id="poolInfo" class="pill">0 present</span>
+        <div class="actions-row">
+          <button id="undoButton" class="ghost">Go back</button>
+          <button id="popOut" class="ghost">Pop out</button>
+        </div>
+      </div>
+
+      <div class="callout" id="currentStudentCallout">
+        <p class="eyebrow">Current student</p>
+        <div id="currentStudentName" class="big-name">No one selected</div>
+        <p id="currentStatus" class="status">Waiting to pick</p>
+        <div class="actions-row">
+          <button id="pickStudent" class="primary">Pick next student</button>
+          <button id="skipStudent" class="ghost">Skip</button>
+        </div>
+      </div>
+
+      <div class="status-grid" id="statusButtons">
+        <button data-outcome="correct" class="status-btn success">Correct</button>
+        <button data-outcome="incorrect" class="status-btn warn">Incorrect</button>
+        <button data-outcome="pass" class="status-btn muted">Pass</button>
+        <button data-outcome="absent" class="status-btn danger">Absent</button>
+        <button data-outcome="reset" class="status-btn">Reset status</button>
+      </div>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>Class list</h2>
+        <div class="legend">
+          <span class="dot success"></span> Correct
+          <span class="dot warn"></span> Incorrect
+          <span class="dot muted"></span> Pass
+          <span class="dot danger"></span> Absent
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Class</th>
+              <th>Period</th>
+              <th>Status</th>
+              <th>Calls</th>
+              <th>Last outcome</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="studentTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

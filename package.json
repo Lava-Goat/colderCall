@@ -1,0 +1,14 @@
+{
+  "name": "coldercall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "colderCall - browser app with server-side SQLite storage",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.1",
+    "express": "^4.19.2"
+  }
+}
