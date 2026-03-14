@@ -10,7 +10,8 @@
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.3.1",
+    "exceljs": "^4.4.0",
     "express": "^4.19.2",
-    "xlsx": "^0.18.5"
+    "multer": "^2.1.1"
   }
 }

@@ -4,6 +4,8 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const Database = require("better-sqlite3");
+const multer = require("multer");
+const ExcelJS = require("exceljs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -158,14 +160,123 @@ const saveSession = db.transaction(
   }
 );
 
+const aeriesUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      || file.originalname.endsWith(".xlsx"));
+  },
+});
+
+const AERIES_HEADER_MAP = {
+  lastname: "last", last: "last", lname: "last",
+  firstname: "first", first: "first", fname: "first",
+  studentname: "full", student: "full", name: "full", fullname: "full",
+  per: "period", period: "period", pd: "period",
+  course: "className", coursename: "className", coursetitle: "className",
+  coursedescription: "className", description: "className",
+  class: "className", classname: "className",
+  stunum: "_id", studentnumber: "_id", studentid: "_id", perm: "_id", permid: "_id",
+  grade: "_skip", grd: "_skip", gradelevel: "_skip", sex: "_skip", gender: "_skip",
+};
+const AERIES_HEADER_THRESHOLD = 2;
+
+function normalizeCol(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+}
+
+async function parseAeriesBuffer(buffer, defaults = {}) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error("No worksheets found in file.");
+
+  // Collect all rows as string arrays
+  const rows = [];
+  worksheet.eachRow({ includeEmpty: true }, (row) => {
+    const cells = [];
+    for (let c = 1; c <= worksheet.columnCount; c++) {
+      cells.push(String(row.getCell(c).text || "").trim());
+    }
+    rows.push(cells);
+  });
+
+  // Find header row in first 10 rows
+  let headerRowIdx = -1;
+  let fieldMap = {};
+  for (let r = 0; r < Math.min(10, rows.length); r++) {
+    const candidate = {};
+    let hits = 0;
+    rows[r].forEach((cell, colIdx) => {
+      const field = AERIES_HEADER_MAP[normalizeCol(cell)];
+      if (field) {
+        hits++;
+        if (!field.startsWith("_")) candidate[colIdx] = field;
+      }
+    });
+    if (hits >= AERIES_HEADER_THRESHOLD) {
+      headerRowIdx = r;
+      fieldMap = candidate;
+      break;
+    }
+  }
+
+  if (headerRowIdx === -1) {
+    throw new Error("Could not find a recognised Aeries header row. Make sure this is a standard class roster export.");
+  }
+
+  const get = (row, field) => {
+    for (const [colIdx, f] of Object.entries(fieldMap)) {
+      if (f === field) return row[colIdx] || "";
+    }
+    return "";
+  };
+
+  const students = [];
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (row.every((c) => c === "")) continue;
+
+    let first = get(row, "first");
+    let last = get(row, "last");
+    let full = get(row, "full");
+    const className = get(row, "className") || defaults.className || "";
+    const period = get(row, "period") || defaults.period || "";
+
+    // Handle "Last, First" combined column
+    if (full && !first && !last) {
+      if (full.includes(",")) {
+        [last, first] = full.split(",").map((s) => s.trim());
+        full = `${first} ${last}`.trim();
+      }
+    } else if (first || last) {
+      full = `${first} ${last}`.trim();
+    }
+
+    if (!full && !first && !last) continue;
+
+    students.push({
+      id: makeId(),
+      firstName: first,
+      lastName: last,
+      fullName: full || `${first} ${last}`.trim(),
+      className,
+      period,
+      status: "pending",
+      calls: 0,
+      calledThisCycle: false,
+    });
+  }
+
+  return students;
+}
+
 app.use(express.json({ limit: "5mb" }));
-// Serve only known front-end files, not the entire directory (prevents /data/colderCall.sqlite exposure)
+// Serve only known front-end files — prevents /data/colderCall.sqlite exposure
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/app.js", (_req, res) => res.sendFile(path.join(__dirname, "app.js")));
 app.get("/styles.css", (_req, res) => res.sendFile(path.join(__dirname, "styles.css")));
-app.get("/xlsx.full.min.js", (_req, res) =>
-  res.sendFile(path.join(__dirname, "node_modules/xlsx/dist/xlsx.full.min.js"))
-);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, dbPath: DB_PATH });
@@ -173,6 +284,23 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/config", (_req, res) => {
   res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
+});
+
+app.post("/api/parse/aeries", aeriesUpload.single("file"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded or file is not an XLSX." });
+  }
+  const defaults = {
+    className: (req.body && req.body.defaultClassName) || "",
+    period: (req.body && req.body.defaultPeriod) || "",
+  };
+  try {
+    const students = await parseAeriesBuffer(req.file.buffer, defaults);
+    res.json({ students });
+  } catch (err) {
+    console.error("Aeries parse failed", err);
+    res.status(422).json({ error: err.message });
+  }
 });
 
 app.post("/api/session", (req, res) => {

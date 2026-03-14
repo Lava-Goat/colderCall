@@ -423,153 +423,31 @@ function handleRosterUpload(event) {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Aeries XLSX import
-// ---------------------------------------------------------------------------
-
-// Column header aliases found in Aeries roster exports.
-// Keys are the normalised header string (lowercase, letters only).
-// Values are the internal field they map to.
-const AERIES_HEADER_MAP = {
-  // Last name
-  lastname: "last", last: "last", lname: "last",
-  // First name
-  firstname: "first", first: "first", fname: "first",
-  // Full name (some exports use a single "Student Name" column, "Last, First" format)
-  studentname: "full", student: "full", name: "full", fullname: "full",
-  // Period
-  per: "period", period: "period", pd: "period",
-  // Course / class name
-  course: "className", coursename: "className", coursetitle: "className",
-  coursedescription: "className", description: "className",
-  class: "className", classname: "className", section: "className",
-  // Student ID (kept for reference but not mapped to a colderCall field)
-  stunum: "_id", studentnumber: "_id", studentid: "_id", id: "_id", perm: "_id",
-  permid: "_id",
-  // Grade level — ignored but recognised so it doesn't confuse the detector
-  grade: "_grade", grd: "_grade", gradelevel: "_grade",
-  // Gender — ignored
-  sex: "_skip", gender: "_skip",
-};
-
-// How many of these recognised Aeries headers must be present for us to treat
-// the row as the header row rather than data.
-const AERIES_HEADER_THRESHOLD = 2;
-
-function parseAeriesXlsx(arrayBuffer) {
-  const workbook = XLSX.read(arrayBuffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  // Convert to array-of-arrays; defval keeps empty cells as empty string
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-  if (!rows.length) return [];
-
-  // Find the header row: scan up to the first 10 rows for one that contains
-  // enough recognised Aeries column names.
-  let headerRowIdx = -1;
-  let fieldMap = {}; // colIndex → internal field name
-
-  for (let r = 0; r < Math.min(10, rows.length); r++) {
-    const candidate = {};
-    let hits = 0;
-    rows[r].forEach((cell, colIdx) => {
-      const key = normalizeHeader(String(cell));
-      const field = AERIES_HEADER_MAP[key];
-      if (field && !field.startsWith("_")) {
-        candidate[colIdx] = field;
-        hits++;
-      } else if (field) {
-        hits++; // recognised but intentionally skipped field still counts as a hit
-      }
-    });
-    if (hits >= AERIES_HEADER_THRESHOLD) {
-      headerRowIdx = r;
-      fieldMap = candidate;
-      break;
-    }
-  }
-
-  if (headerRowIdx === -1) {
-    throw new Error(
-      "Could not find a recognised Aeries header row in the first 10 rows. " +
-      "Make sure you are using a standard Aeries class roster export."
-    );
-  }
-
-  const defaults = getDefaults();
-  const parsed = [];
-
-  for (let r = headerRowIdx + 1; r < rows.length; r++) {
-    const row = rows[r];
-    // Skip completely empty rows
-    if (row.every((c) => String(c).trim() === "")) continue;
-
-    const get = (field) => {
-      for (const [colIdx, f] of Object.entries(fieldMap)) {
-        if (f === field) return String(row[colIdx] || "").trim();
-      }
-      return "";
-    };
-
-    let first = get("first");
-    let last = get("last");
-    let full = get("full");
-    let className = get("className") || defaults.className;
-    let period = get("period") || defaults.period;
-
-    // If we got a combined "Last, First" full-name column, split it
-    if (full && !first && !last) {
-      const derived = deriveFromFull(full);
-      first = derived.first;
-      last = derived.last;
-      full = derived.full;
-    } else if (first || last) {
-      full = `${first} ${last}`.trim();
-    }
-
-    if (!full && !first && !last) continue;
-
-    parsed.push({
-      id: randomId(),
-      firstName: first,
-      lastName: last,
-      fullName: full || `${first} ${last}`.trim(),
-      className,
-      period,
-      status: "pending",
-      calls: 0,
-      calledThisCycle: false,
-    });
-  }
-
-  return parsed;
-}
-
-function handleAeriesUpload(event) {
+async function handleAeriesUpload(event) {
   const [file] = event.target.files;
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const parsed = parseAeriesXlsx(e.target.result);
-      if (!parsed.length) {
-        alert("No students found in that Aeries file. Check that it is a class roster export.");
-        return;
-      }
-      addStudents(parsed);
-    } catch (err) {
-      alert(`Unable to parse Aeries file: ${err.message}`);
-    } finally {
-      event.target.value = "";
+  event.target.disabled = true;
+  const defaults = getDefaults();
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("defaultClassName", defaults.className);
+    form.append("defaultPeriod", defaults.period);
+    const res = await fetch("/api/parse/aeries", { method: "POST", body: form });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || "Server error");
+    if (!payload.students || !payload.students.length) {
+      alert("No students found in that Aeries file. Check that it is a standard class roster export.");
+      return;
     }
-  };
-  reader.onerror = () => {
-    alert("Unable to read that file.");
+    addStudents(payload.students);
+  } catch (err) {
+    alert(`Unable to import Aeries file: ${err.message}`);
+  } finally {
     event.target.value = "";
-  };
-  reader.readAsArrayBuffer(file);
+    event.target.disabled = false;
+  }
 }
-
-// ---------------------------------------------------------------------------
 
 let classroomToken = null;
 let googleClientId = "";
