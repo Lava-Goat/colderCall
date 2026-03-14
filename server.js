@@ -203,44 +203,47 @@ function parseAeriesBuffer(buffer, defaults = {}) {
   if (!sheetName) throw new Error("No worksheets found in file.");
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
 
-  // ── Step 1: extract class metadata from the Aeries header block ──────────
-  // Aeries attendance rosters have a label row (e.g. "Period", "Course Title")
-  // followed by a value row before the student list.  We capture these so we
-  // can fall back to them for period/class when those columns are absent in the
-  // student data section.
-  let metaPeriod = defaults.period || "";
-  let metaClassName = defaults.className || "";
+  // State machine: walk every row once, updating class context whenever the
+  // Aeries label row (Period | Course Title | …) is encountered and collecting
+  // students in between.  This handles any number of classes in a single file.
+  const students = [];
+  let currentPeriod = defaults.period || "";
+  let currentClassName = defaults.className || "";
+  let studentFieldMap = null; // non-null once we've seen a student header row
 
-  for (let r = 0; r < Math.min(8, rows.length); r++) {
-    const labelRow = rows[r];
-    const valueRow = rows[r + 1] || [];
-    const periodLabelIdx = labelRow.findIndex((c) => normalizeCol(c) === "period");
-    const courseLabelIdx = labelRow.findIndex((c) =>
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i];
+
+    // ── Detect class metadata label row ─────────────────────────────────────
+    // Aeries label rows have BOTH "Period" and a course-name column in the same
+    // row (e.g. "Course Title", "Course", …).  We require both so we don't
+    // accidentally match a student header row that happens to have "Period".
+    const periodLabelIdx = row.findIndex((c) => normalizeCol(c) === "period");
+    const courseLabelIdx = row.findIndex((c) =>
       ["coursetitle", "course", "coursename", "coursedescription"].includes(normalizeCol(c))
     );
-    if (periodLabelIdx !== -1 || courseLabelIdx !== -1) {
-      if (periodLabelIdx !== -1 && !metaPeriod) {
-        const raw = String(valueRow[periodLabelIdx] || "").trim();
-        if (raw) metaPeriod = extractPeriod(raw);
-      }
-      if (courseLabelIdx !== -1 && !metaClassName) {
-        metaClassName = String(valueRow[courseLabelIdx] || "").trim();
-      }
-      // Don't break — there may be multiple such blocks on a multi-class export
+
+    if (periodLabelIdx !== -1 && courseLabelIdx !== -1) {
+      // The very next row contains the actual values for this class.
+      const valueRow = rows[i + 1] || [];
+      const rawPeriod = String(valueRow[periodLabelIdx] || "").trim();
+      const rawClass = String(valueRow[courseLabelIdx] || "").trim();
+      if (rawPeriod) currentPeriod = extractPeriod(rawPeriod);
+      if (rawClass) currentClassName = rawClass;
+      // Reset student header — each class block has its own header row.
+      studentFieldMap = null;
+      i += 2; // consume label row + value row
+      continue;
     }
-  }
 
-  // ── Step 2: find the student data header row ──────────────────────────────
-  // Must have ≥ 1 recognised name column (full/first/last) to avoid matching
-  // the class metadata label row that also contains "Period", "Course Title".
-  let headerRowIdx = -1;
-  let fieldMap = {};
-
-  for (let r = 0; r < rows.length; r++) {
+    // ── Detect student column header row ─────────────────────────────────────
+    // Must contain at least one name-type column (full / first / last) so we
+    // don't confuse it with the class metadata label row above.
     const candidate = {};
     let hits = 0;
     let hasName = false;
-    rows[r].forEach((cell, colIdx) => {
+    row.forEach((cell, colIdx) => {
       const field = AERIES_HEADER_MAP[normalizeCol(cell)];
       if (field) {
         hits++;
@@ -251,63 +254,57 @@ function parseAeriesBuffer(buffer, defaults = {}) {
       }
     });
     if (hits >= 2 && hasName) {
-      headerRowIdx = r;
-      fieldMap = candidate;
-      break;
+      studentFieldMap = candidate;
+      i++;
+      continue;
     }
-  }
 
-  if (headerRowIdx === -1) {
-    throw new Error("Could not find a recognised Aeries header row. Make sure this is a standard class roster export.");
-  }
+    // ── Parse a student data row ──────────────────────────────────────────────
+    if (studentFieldMap && row.some((c) => String(c).trim() !== "")) {
+      const get = (field) => {
+        for (const [colIdx, f] of Object.entries(studentFieldMap)) {
+          if (f === field) return String(row[colIdx] || "").trim();
+        }
+        return "";
+      };
 
-  const get = (row, field) => {
-    for (const [colIdx, f] of Object.entries(fieldMap)) {
-      if (f === field) return String(row[colIdx] || "").trim();
-    }
-    return "";
-  };
+      let first = get("first").replace(/^\*+/, "").trim();
+      let last  = get("last").replace(/^\*+/, "").trim();
+      let full  = get("full").replace(/^\*+/, "").trim();
+      const className = get("className") || currentClassName;
+      const period    = get("period")    || currentPeriod;
 
-  const students = [];
-  for (let r = headerRowIdx + 1; r < rows.length; r++) {
-    const row = rows[r];
-    if (row.every((c) => String(c).trim() === "")) continue;
-
-    let first = get(row, "first");
-    let last = get(row, "last");
-    // Strip leading * Aeries uses to mark certain students (e.g. IEP/504)
-    let full = get(row, "full").replace(/^\*+/, "").trim();
-    if (first) first = first.replace(/^\*+/, "").trim();
-    if (last) last = last.replace(/^\*+/, "").trim();
-
-    const className = get(row, "className") || metaClassName;
-    const period = get(row, "period") || metaPeriod;
-
-    // Handle "Last, First MI" combined column
-    if (full && !first && !last) {
-      if (full.includes(",")) {
-        [last, first] = full.split(",").map((s) => s.trim());
-        // Strip trailing middle initial (single letter, optionally followed by ".")
-        first = first.replace(/\s+[A-Z]\.?$/, "").trim();
+      // "Last, First MI" combined column → split and strip middle initial
+      if (full && !first && !last) {
+        if (full.includes(",")) {
+          [last, first] = full.split(",").map((s) => s.trim());
+          first = first.replace(/\s+[A-Z]\.?$/, "").trim();
+          full = `${first} ${last}`.trim();
+        }
+      } else if (first || last) {
         full = `${first} ${last}`.trim();
       }
-    } else if (first || last) {
-      full = `${first} ${last}`.trim();
+
+      if (full || first || last) {
+        students.push({
+          id: makeId(),
+          firstName: first,
+          lastName: last,
+          fullName: full || `${first} ${last}`.trim(),
+          className,
+          period,
+          status: "pending",
+          calls: 0,
+          calledThisCycle: false,
+        });
+      }
     }
 
-    if (!full && !first && !last) continue;
+    i++;
+  }
 
-    students.push({
-      id: makeId(),
-      firstName: first,
-      lastName: last,
-      fullName: full || `${first} ${last}`.trim(),
-      className,
-      period,
-      status: "pending",
-      calls: 0,
-      calledThisCycle: false,
-    });
+  if (!students.length) {
+    throw new Error("Could not find a recognised Aeries header row. Make sure this is a standard class roster export.");
   }
 
   return students;
