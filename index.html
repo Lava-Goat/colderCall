@@ -24,15 +24,19 @@
   </header>
 
   <main class="layout">
-    <section class="panel">
+    <section class="panel" id="rosterPanel">
       <div class="panel-header">
         <h2>Roster & setup</h2>
-        <label class="toggle">
-          <input type="checkbox" id="withReplacement">
-          <span>Allow repeats</span>
-        </label>
+        <div class="actions-row">
+          <label class="toggle">
+            <input type="checkbox" id="withReplacement">
+            <span>Allow repeats</span>
+          </label>
+          <button class="collapse-btn ghost icon-btn" id="collapseRoster" title="Collapse">▾</button>
+        </div>
       </div>
 
+      <div class="panel-body">
       <div class="field">
         <label>Upload roster</label>
         <div class="field-inline">
@@ -135,6 +139,7 @@
         <button id="resetCycle" class="ghost">Reset cycle</button>
         <button id="clearRoster" class="ghost danger">Clear roster</button>
       </div>
+      </div>
     </section>
 
     <section class="panel pick-panel">
@@ -171,7 +176,7 @@
       </div>
     </section>
 
-    <section class="panel wide">
+    <section class="panel wide" id="classListPanel">
       <div class="panel-header">
         <h2>Class list</h2>
         <div class="legend">
@@ -180,8 +185,10 @@
           <span class="dot muted"></span> Pass
           <span class="dot danger"></span> Absent
         </div>
+        <button class="collapse-btn ghost icon-btn" id="collapseClassList" title="Collapse">▾</button>
       </div>
 
+      <div class="panel-body">
       <div class="table-wrapper">
         <table>
           <thead>
@@ -199,9 +206,11 @@
           <tbody id="studentTable"></tbody>
         </table>
       </div>
+      </div>
     </section>
   </main>
 
+  <button id="fullscreenBtn" class="ghost icon-btn" title="Fullscreen">⛶</button>
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script type="module" src="app.js?v=2"></script>
 </body>

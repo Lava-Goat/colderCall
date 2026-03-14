@@ -781,6 +781,13 @@ function renderStudents() {
     absentBtn.textContent = student.status === "absent" ? "Present" : "Absent";
     actionsRow.appendChild(absentBtn);
 
+    const editNameBtn = document.createElement("button");
+    editNameBtn.className = "ghost";
+    editNameBtn.dataset.action = "edit-name";
+    editNameBtn.dataset.id = student.id;
+    editNameBtn.textContent = "Edit";
+    actionsRow.appendChild(editNameBtn);
+
     const focusBtn = document.createElement("button");
     focusBtn.className = "ghost";
     focusBtn.dataset.action = "focus";
@@ -1162,6 +1169,13 @@ function handleTableClick(event) {
     if (state.currentId === id) state.currentId = null;
     markDirty();
   }
+  if (action === "edit-name") {
+    const newFirst = prompt("First name:", student.firstName || "");
+    if (newFirst === null) return;
+    pushHistory();
+    student.firstName = newFirst.trim();
+    markDirty();
+  }
   if (action === "focus") {
     pushHistory();
     state.currentId = id;
@@ -1352,6 +1366,34 @@ function downloadFile(filename, data, mime) {
   });
 }
 
+const COLLAPSE_KEY = "colderCall-collapse";
+
+function toggleCollapse(panelId, btnId) {
+  const panel = document.getElementById(panelId);
+  const btn = document.getElementById(btnId);
+  if (!panel || !btn) return;
+  const isCollapsed = panel.classList.toggle("collapsed");
+  btn.textContent = isCollapsed ? "▸" : "▾";
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
+    saved[panelId] = isCollapsed;
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify(saved));
+  } catch {}
+}
+
+function loadCollapseState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
+    for (const [panelId, collapsed] of Object.entries(saved)) {
+      if (!collapsed) continue;
+      const panel = document.getElementById(panelId);
+      const btn = panel && panel.querySelector(".collapse-btn");
+      if (panel) panel.classList.add("collapsed");
+      if (btn) btn.textContent = "▸";
+    }
+  } catch {}
+}
+
 function init() {
   if (isPopoutMode) {
     document.body.classList.add("popout-mode");
@@ -1446,6 +1488,23 @@ function init() {
   elements.saveServer.addEventListener("click", saveToServer);
   elements.loadServer.addEventListener("click", loadFromServer);
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  loadCollapseState();
+  document.getElementById("collapseRoster")?.addEventListener("click", () => toggleCollapse("rosterPanel", "collapseRoster"));
+  document.getElementById("collapseClassList")?.addEventListener("click", () => toggleCollapse("classListPanel", "collapseClassList"));
+  const fullscreenBtn = document.getElementById("fullscreenBtn");
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      fullscreenBtn.textContent = document.fullscreenElement ? "✕" : "⛶";
+      fullscreenBtn.title = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+    });
+  }
   document.addEventListener("keydown", (event) => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;

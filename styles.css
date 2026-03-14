@@ -459,3 +459,75 @@ tr:hover td {
     align-items: stretch;
   }
 }
+
+/* Collapsible panels */
+.panel.collapsed .panel-body {
+  display: none;
+}
+
+/* Popout mode — display-only name screen */
+body.popout-mode {
+  padding: 0;
+}
+
+body.popout-mode main.layout {
+  display: block;
+  height: 100vh;
+}
+
+body.popout-mode .pick-panel {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: 40px;
+}
+
+body.popout-mode .pick-panel .panel-header,
+body.popout-mode #filterSection,
+body.popout-mode #currentStudentCallout .eyebrow,
+body.popout-mode #currentStudentCallout .status,
+body.popout-mode #currentStudentCallout .actions-row,
+body.popout-mode #statusButtons {
+  display: none;
+}
+
+body.popout-mode #currentStudentCallout {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  width: 100%;
+}
+
+body.popout-mode #currentStudentName {
+  font-size: clamp(3rem, 12vw, 9rem);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-word;
+}
+
+/* Fullscreen button — popout mode only */
+#fullscreenBtn {
+  display: none;
+}
+
+body.popout-mode #fullscreenBtn {
+  display: block;
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  opacity: 0.35;
+  font-size: 18px;
+  transition: opacity 200ms ease, transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+body.popout-mode #fullscreenBtn:hover {
+  opacity: 1;
+}
