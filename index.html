@@ -147,11 +147,9 @@
         </div>
       </div>
 
-      <div class="field" style="margin-bottom:12px">
-        <label for="filterPicker">Active pool</label>
-        <select id="filterPicker">
-          <option value="all">All students</option>
-        </select>
+      <div id="filterSection" style="margin-bottom:14px">
+        <p class="eyebrow" style="margin-bottom:6px">Active pool</p>
+        <div id="filterButtons" class="actions-row" style="flex-wrap:wrap;gap:6px"></div>
       </div>
 
       <div class="callout" id="currentStudentCallout">
@@ -205,6 +203,6 @@
   </main>
 
   <script src="https://accounts.google.com/gsi/client" async></script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>

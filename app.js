@@ -39,7 +39,7 @@ const elements = {
   cycleInfo: document.getElementById("cycleInfo"),
   undoButton: document.getElementById("undoButton"),
   popOut: document.getElementById("popOut"),
-  filterPicker: document.getElementById("filterPicker"),
+  filterButtons: document.getElementById("filterButtons"),
   groupNameInput: document.getElementById("groupNameInput"),
   createGroupBtn: document.getElementById("createGroupBtn"),
   groupList: document.getElementById("groupList"),
@@ -804,61 +804,76 @@ function renderStudents() {
   elements.studentTable.appendChild(fragment);
 }
 
+function activeFilterValue() {
+  const f = state.activeFilter;
+  if (!f || f.type === "all") return "all";
+  if (f.type === "class") return `class:${f.key}`;
+  if (f.type === "group-include") return `group-include:${f.groupId}`;
+  if (f.type === "group-exclude") return `group-exclude:${f.groupId}`;
+  return "all";
+}
+
+function setActiveFilterFromValue(val) {
+  if (!val || val === "all") {
+    state.activeFilter = { type: "all" };
+  } else if (val.startsWith("class:")) {
+    state.activeFilter = { type: "class", key: val.slice(6) };
+  } else if (val.startsWith("group-include:")) {
+    state.activeFilter = { type: "group-include", groupId: val.slice(14) };
+  } else if (val.startsWith("group-exclude:")) {
+    state.activeFilter = { type: "group-exclude", groupId: val.slice(14) };
+  }
+}
+
 function renderFilterPicker() {
-  const picker = elements.filterPicker;
-  if (!picker) return;
-  const prevValue = picker.value;
-  picker.innerHTML = "";
+  const container = elements.filterButtons;
+  if (!container) return;
+  container.innerHTML = "";
 
-  const allOpt = document.createElement("option");
-  allOpt.value = "all";
-  allOpt.textContent = "All students";
-  picker.appendChild(allOpt);
+  const current = activeFilterValue();
 
-  // Class options derived from roster
+  function makeBtn(value, label, title) {
+    const btn = document.createElement("button");
+    btn.className = value === current ? "primary" : "ghost";
+    btn.textContent = label;
+    if (title) btn.title = title;
+    btn.addEventListener("click", () => {
+      setActiveFilterFromValue(value);
+      persistState();
+      renderFilterPicker();
+      renderPoolInfo();
+    });
+    return btn;
+  }
+
+  // "All" button
+  container.appendChild(makeBtn("all", "All students"));
+
+  // One button per class
   const classMap = new Map();
   state.students.forEach((s) => {
     const key = `${s.period}|||${s.className}`;
     if (!classMap.has(key)) classMap.set(key, { period: s.period, className: s.className, count: 0 });
     classMap.get(key).count++;
   });
-  if (classMap.size > 0) {
-    const grp = document.createElement("optgroup");
-    grp.label = "Classes";
-    classMap.forEach(({ period, className, count }, key) => {
-      const parts = [className, period && `Per ${period}`].filter(Boolean);
-      const opt = document.createElement("option");
-      opt.value = `class:${key}`;
-      opt.textContent = `${parts.join(" — ") || "Unknown class"} (${count})`;
-      grp.appendChild(opt);
-    });
-    picker.appendChild(grp);
-  }
+  classMap.forEach(({ period, className, count }, key) => {
+    const parts = [period && `Per ${period}`, className].filter(Boolean);
+    const label = parts.join(" · ") || "Unknown class";
+    container.appendChild(makeBtn(`class:${key}`, label, `${count} students`));
+  });
 
-  // Group options
-  if (state.groups.length > 0) {
-    const grp = document.createElement("optgroup");
-    grp.label = "Groups";
-    state.groups.forEach((group) => {
-      const optIn = document.createElement("option");
-      optIn.value = `group-include:${group.id}`;
-      optIn.textContent = `${group.name} only (${group.studentIds.length})`;
-      grp.appendChild(optIn);
+  // Group buttons (include / exclude pairs)
+  state.groups.forEach((group) => {
+    container.appendChild(makeBtn(`group-include:${group.id}`, `${group.name} only`, `Only call this group (${group.studentIds.length})`));
+    container.appendChild(makeBtn(`group-exclude:${group.id}`, `Skip ${group.name}`, `Call everyone except this group (${group.studentIds.length})`));
+  });
 
-      const optEx = document.createElement("option");
-      optEx.value = `group-exclude:${group.id}`;
-      optEx.textContent = `Exclude ${group.name} (${group.studentIds.length})`;
-      grp.appendChild(optEx);
-    });
-    picker.appendChild(grp);
-  }
-
-  // Restore prior selection if still valid
-  const validValues = Array.from(picker.options).map((o) => o.value);
-  if (validValues.includes(prevValue)) {
-    picker.value = prevValue;
-  } else {
-    picker.value = "all";
+  // If current filter is no longer valid, reset to all
+  const allValues = ["all",
+    ...Array.from(classMap.keys()).map((k) => `class:${k}`),
+    ...state.groups.flatMap((g) => [`group-include:${g.id}`, `group-exclude:${g.id}`]),
+  ];
+  if (!allValues.includes(current)) {
     state.activeFilter = { type: "all" };
   }
 }
@@ -1425,22 +1440,6 @@ function init() {
   if (elements.groupNameInput) {
     elements.groupNameInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") createGroup();
-    });
-  }
-  if (elements.filterPicker) {
-    elements.filterPicker.addEventListener("change", () => {
-      const val = elements.filterPicker.value;
-      if (val === "all") {
-        state.activeFilter = { type: "all" };
-      } else if (val.startsWith("class:")) {
-        state.activeFilter = { type: "class", key: val.slice(6) };
-      } else if (val.startsWith("group-include:")) {
-        state.activeFilter = { type: "group-include", groupId: val.slice(14) };
-      } else if (val.startsWith("group-exclude:")) {
-        state.activeFilter = { type: "group-exclude", groupId: val.slice(14) };
-      }
-      persistState();
-      renderPoolInfo();
     });
   }
   elements.exportCsv.addEventListener("click", toCsv);
