@@ -9,9 +9,12 @@ const elements = {
   periodInput: document.getElementById("periodInput"),
   defaultClassName: document.getElementById("defaultClassName"),
   defaultPeriod: document.getElementById("defaultPeriod"),
-  classroomCourseId: document.getElementById("classroomCourseId"),
-  classroomToken: document.getElementById("classroomToken"),
+  classroomSignIn: document.getElementById("classroomSignIn"),
+  classroomSignOut: document.getElementById("classroomSignOut"),
+  classroomPickerRow: document.getElementById("classroomPickerRow"),
+  classroomCoursePicker: document.getElementById("classroomCoursePicker"),
   classroomApiImport: document.getElementById("classroomApiImport"),
+  classroomStatus: document.getElementById("classroomStatus"),
   displayMode: document.getElementById("displayMode"),
   memo: document.getElementById("memo"),
   carryMemo: document.getElementById("carryMemo"),
@@ -28,6 +31,7 @@ const elements = {
   studentTable: document.getElementById("studentTable"),
   exportCsv: document.getElementById("exportCsv"),
   saveServer: document.getElementById("saveServer"),
+  loadServer: document.getElementById("loadServer"),
   serverStatus: document.getElementById("serverStatus"),
   cycleInfo: document.getElementById("cycleInfo"),
   undoButton: document.getElementById("undoButton"),
@@ -51,6 +55,34 @@ const state = {
 };
 
 let unsavedChanges = false;
+
+// Theme toggle — persists in localStorage, overrides prefers-color-scheme
+const THEME_KEY = "colderCall-theme";
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const btn = document.getElementById("themeToggle");
+  if (btn) btn.textContent = theme === "dark" ? "🌙" : "☀️";
+}
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(saved || (systemDark ? "dark" : "light"));
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+}
+initTheme();
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
 const historyStack = [];
 const HISTORY_LIMIT = 30;
 const windowId = randomId();
@@ -390,50 +422,149 @@ function handleRosterUpload(event) {
     });
 }
 
-async function importClassroomApi() {
-  const courseId = elements.classroomCourseId.value.trim();
-  const token = elements.classroomToken.value.trim();
-  if (!courseId || !token) {
-    alert("Please provide both a Classroom course ID and an OAuth access token.");
+let classroomToken = null;
+let googleClientId = "";
+
+async function loadConfig() {
+  try {
+    const res = await fetch("/api/config");
+    const data = await res.json();
+    googleClientId = data.googleClientId || "";
+  } catch (_) {}
+}
+
+async function classroomGet(endpoint, params = {}) {
+  const url = new URL(`https://classroom.googleapis.com/v1/${endpoint}`);
+  Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${classroomToken}` } });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Classroom API error (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+function classroomSignIn() {
+  if (!googleClientId) {
+    alert("No Google Client ID configured. Add GOOGLE_CLIENT_ID to your .env file.");
     return;
   }
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: googleClientId,
+    scope: "https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.courses.readonly",
+    callback: async (tokenResponse) => {
+      if (tokenResponse.error) {
+        elements.classroomStatus.textContent = `Sign-in failed: ${tokenResponse.error}`;
+        return;
+      }
+      classroomToken = tokenResponse.access_token;
+      elements.classroomSignIn.style.display = "none";
+      elements.classroomSignOut.style.display = "";
+      elements.classroomStatus.textContent = "Loading courses…";
+      await loadClassroomCourses();
+    },
+  });
+  client.requestAccessToken();
+}
+
+function classroomSignOut() {
+  if (classroomToken) {
+    google.accounts.oauth2.revoke(classroomToken, () => {});
+  }
+  classroomToken = null;
+  elements.classroomSignIn.style.display = "";
+  elements.classroomSignOut.style.display = "none";
+  elements.classroomPickerRow.style.display = "none";
+  elements.classroomCoursePicker.innerHTML = '<option value="">— select a course —</option>';
+  elements.classroomApiImport.disabled = true;
+  elements.classroomStatus.textContent = "";
+}
+
+async function loadClassroomCourses() {
+  try {
+    let allCourses = [];
+    let pageToken;
+    do {
+      const data = await classroomGet("courses", { courseStates: "ACTIVE", pageToken, pageSize: 50 });
+      allCourses = allCourses.concat(data.courses || []);
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    elements.classroomCoursePicker.innerHTML = '<option value="">— select a course —</option>';
+    allCourses.forEach((course) => {
+      const opt = document.createElement("option");
+      opt.value = course.id;
+      opt.textContent = course.section ? `${course.name} (${course.section})` : course.name;
+      opt.dataset.name = course.name;
+      opt.dataset.section = course.section || "";
+      elements.classroomCoursePicker.appendChild(opt);
+    });
+    elements.classroomPickerRow.style.display = "";
+    elements.classroomStatus.textContent = `${allCourses.length} course${allCourses.length === 1 ? "" : "s"} found`;
+  } catch (error) {
+    console.error("Failed to load courses", error);
+    elements.classroomStatus.textContent = "Failed to load courses. Try signing in again.";
+    classroomSignOut();
+  }
+}
+
+async function importClassroomApi() {
+  const courseId = elements.classroomCoursePicker.value;
+  if (!courseId) {
+    alert("Please select a course first.");
+    return;
+  }
+  const selectedOption = elements.classroomCoursePicker.selectedOptions[0];
+  const courseName = selectedOption?.dataset.name || "";
+  const courseSection = selectedOption?.dataset.section || "";
+
   elements.classroomApiImport.disabled = true;
   elements.classroomApiImport.textContent = "Importing…";
   try {
-    const response = await fetch("/api/classroom/students", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ courseId, accessToken: token }),
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Request failed");
-    }
-    const payload = await response.json();
-    if (payload.students && payload.students.length) {
-      addStudents(payload.students);
-      if (!state.defaults.className && payload.courseName) {
-        state.defaults.className = payload.courseName;
-        elements.defaultClassName.value = payload.courseName;
+    let allStudents = [];
+    let pageToken;
+    do {
+      const data = await classroomGet(`courses/${courseId}/students`, { pageToken, pageSize: 100 });
+      allStudents = allStudents.concat(data.students || []);
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    const mapped = allStudents.map((s) => ({
+      id: s.userId || randomId(),
+      fullName: s.profile?.name?.fullName || "",
+      firstName: s.profile?.name?.givenName || "",
+      lastName: s.profile?.name?.familyName || "",
+      className: courseName,
+      period: courseSection,
+      status: "pending",
+      calls: 0,
+      calledThisCycle: false,
+    }));
+
+    if (mapped.length) {
+      addStudents(mapped);
+      if (!state.defaults.className && courseName) {
+        state.defaults.className = courseName;
+        elements.defaultClassName.value = courseName;
         markDirty();
         persistState();
       }
-      if (!state.defaults.period && payload.section) {
-        state.defaults.period = payload.section;
-        elements.defaultPeriod.value = payload.section;
+      if (!state.defaults.period && courseSection) {
+        state.defaults.period = courseSection;
+        elements.defaultPeriod.value = courseSection;
         markDirty();
         persistState();
       }
+      elements.classroomStatus.textContent = `Imported ${mapped.length} students from ${courseName}`;
     } else {
       alert("No students returned from Classroom.");
     }
   } catch (error) {
     console.error("Classroom import failed", error);
-    alert("Unable to import from Google Classroom. Check the course ID and token.");
+    elements.classroomStatus.textContent = "Import failed. Try signing in again.";
   } finally {
     elements.classroomApiImport.disabled = false;
-    elements.classroomApiImport.textContent = "Import via Classroom API";
-    elements.classroomToken.value = "";
+    elements.classroomApiImport.textContent = "Import roster";
   }
 }
 
@@ -551,10 +682,10 @@ function render() {
 function applyRemoteState(payload) {
   if (!payload) return;
   applyingRemote = true;
-  Object.assign(state, snapshotState(), payload);
-  applyingRemote = false;
+  Object.assign(state, payload);
   unsavedChanges = true;
   persistState();
+  applyingRemote = false;
   render();
 }
 
@@ -569,16 +700,14 @@ function pickStudent() {
     ? available
     : available.filter((s) => !s.calledThisCycle);
 
+  pushHistory();
   if (!pool.length && !state.withReplacement) {
-    pushHistory();
     state.students = state.students.map((s) => ({
       ...s,
       calledThisCycle: false,
     }));
     pool = available;
   }
-
-  pushHistory();
   const next = pool[Math.floor(Math.random() * pool.length)];
   next.calledThisCycle = true;
   next.calls = (next.calls || 0) + 1;
@@ -706,8 +835,10 @@ function updateDisplayMode(event) {
   render();
 }
 
+const debouncedMemoHistory = debounce(() => pushHistory(), 600);
+
 function updateMemo(event) {
-  pushHistory();
+  debouncedMemoHistory();
   state.memo = event.target.value;
   markDirty();
   persistState();
@@ -723,7 +854,6 @@ function updateReplacement(event) {
 
 function skipStudent() {
   state.currentId = null;
-  renderCurrentStudent();
   pickStudent();
 }
 
@@ -765,6 +895,52 @@ function toCsv() {
     )
     .join("\n");
   downloadFile("colderCall.csv", csv, "text/csv");
+}
+
+async function loadFromServer() {
+  const id = prompt("Enter session ID to load:");
+  if (!id) return;
+  elements.loadServer.disabled = true;
+  setServerStatus("Loading…", "warn");
+  try {
+    const response = await fetch(`/api/session/${encodeURIComponent(id.trim())}`);
+    if (!response.ok) {
+      const msg = await response.text();
+      throw new Error(msg || "Not found");
+    }
+    const data = await response.json();
+    pushHistory();
+    state.students = (data.students || []).map((s) => ({
+      id: s.id,
+      firstName: s.first_name || "",
+      lastName: s.last_name || "",
+      fullName: s.full_name || "",
+      className: s.class_name || "",
+      period: s.period || "",
+      status: s.status || "pending",
+      calls: s.calls || 0,
+      calledThisCycle: Boolean(s.called_this_cycle),
+    }));
+    state.currentId = null;
+    state.memo = data.memo || "";
+    state.displayMode = data.displayMode || "full";
+    state.withReplacement = Boolean(data.withReplacement);
+    state.cycleNumber = data.cycleNumber || 1;
+    state.carryMemo = Boolean(data.carryMemo);
+    state.memoHistory = data.memoHistory || [];
+    state.defaults = data.defaults || { className: "", period: "" };
+    state.sessionId = data.sessionId;
+    unsavedChanges = false;
+    persistState();
+    render();
+    setServerStatus(`Loaded · ${data.sessionId}`, "success");
+  } catch (error) {
+    console.error("Load failed", error);
+    setServerStatus("Load failed", "danger");
+    alert(`Unable to load session: ${error.message}`);
+  } finally {
+    elements.loadServer.disabled = false;
+  }
 }
 
 async function saveToServer() {
@@ -824,6 +1000,7 @@ function init() {
   if (isPopoutMode) {
     document.body.classList.add("popout-mode");
   }
+  loadConfig();
   loadState();
   if (!historyStack.length) {
     historyStack.push(snapshotState());
@@ -863,17 +1040,24 @@ function init() {
     markDirty();
     persistState();
   });
+  const debouncedClassHistory = debounce(() => pushHistory(), 600);
   elements.defaultClassName.addEventListener("input", () => {
-    pushHistory();
+    debouncedClassHistory();
     state.defaults.className = elements.defaultClassName.value.trim();
     markDirty();
     persistState();
   });
+  const debouncedPeriodHistory = debounce(() => pushHistory(), 600);
   elements.defaultPeriod.addEventListener("input", () => {
-    pushHistory();
+    debouncedPeriodHistory();
     state.defaults.period = elements.defaultPeriod.value.trim();
     markDirty();
     persistState();
+  });
+  elements.classroomSignIn.addEventListener("click", classroomSignIn);
+  elements.classroomSignOut.addEventListener("click", classroomSignOut);
+  elements.classroomCoursePicker.addEventListener("change", () => {
+    elements.classroomApiImport.disabled = !elements.classroomCoursePicker.value;
   });
   elements.classroomApiImport.addEventListener("click", importClassroomApi);
   elements.withReplacement.addEventListener("change", updateReplacement);
@@ -884,13 +1068,6 @@ function init() {
   if (isPopoutMode && elements.popOut) {
     elements.popOut.textContent = "Return to main window";
   }
-  setInterval(() => {
-    if (popoutWindow && popoutWindow.closed) {
-      popoutWindow = null;
-      document.body.classList.remove("popout-detached");
-      if (channel) channel.postMessage({ type: "popout-closed", windowId });
-    }
-  }, 2000);
   elements.statusButtons.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-outcome]");
     if (!button) return;
@@ -901,6 +1078,16 @@ function init() {
   elements.studentTable.addEventListener("click", handleTableClick);
   elements.exportCsv.addEventListener("click", toCsv);
   elements.saveServer.addEventListener("click", saveToServer);
+  elements.loadServer.addEventListener("click", loadFromServer);
+  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  document.addEventListener("keydown", (event) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      if (!elements.pickStudent.disabled) pickStudent();
+    }
+  });
   render();
 }
 

@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --bg: #f7f8fb;
   --panel: #ffffff;
   --border: #e2e7ef;
@@ -14,6 +14,85 @@
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--bg);
   color: var(--text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117;
+    --panel: #1a1e2a;
+    --border: #2a3044;
+    --text: #e8ecf4;
+    --muted: #8a94aa;
+    --accent: #4d87f5;
+    --accent-strong: #2d6cdf;
+    --success: #2dbd72;
+    --warn: #f0b429;
+    --danger: #f06868;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  :root:not([data-theme="light"]) input,
+  :root:not([data-theme="light"]) select,
+  :root:not([data-theme="light"]) textarea {
+    background: #111520;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  :root:not([data-theme="light"]) button.ghost {
+    background: #232838;
+    color: var(--text);
+  }
+
+  :root:not([data-theme="light"]) .callout {
+    background: #161b2a;
+    border-color: #2a3a5c;
+  }
+
+  :root:not([data-theme="light"]) tr:hover td {
+    background: #1f2433;
+  }
+}
+
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --panel: #1a1e2a;
+  --border: #2a3044;
+  --text: #e8ecf4;
+  --muted: #8a94aa;
+  --accent: #4d87f5;
+  --accent-strong: #2d6cdf;
+  --success: #2dbd72;
+  --warn: #f0b429;
+  --danger: #f06868;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #111520;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] button.ghost {
+  background: #232838;
+  color: var(--text);
+}
+
+[data-theme="dark"] .callout {
+  background: #161b2a;
+  border-color: #2a3a5c;
+}
+
+[data-theme="dark"] tr:hover td {
+  background: #1f2433;
+}
+
+.icon-btn {
+  font-size: 16px;
+  padding: 8px 10px;
 }
 
 *,

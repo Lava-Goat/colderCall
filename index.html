@@ -16,8 +16,10 @@
       <p id="cycleInfo" class="pill info">Cycle 1</p>
     </div>
     <div class="actions-row">
+      <button id="themeToggle" class="ghost icon-btn" title="Toggle dark mode">☀️</button>
       <button id="exportCsv" class="ghost">Export CSV</button>
       <button id="saveServer" class="primary">Save to server</button>
+      <button id="loadServer" class="ghost">Load session</button>
     </div>
   </header>
 
@@ -48,16 +50,22 @@
         </div>
       </div>
 
-      <div class="field-inline">
-        <div class="field">
-          <label for="classroomCourseId">Google Classroom course ID</label>
-          <input type="text" id="classroomCourseId" placeholder="course id">
+      <div class="field">
+        <label>Google Classroom</label>
+        <div class="actions-row">
+          <button id="classroomSignIn" class="ghost">Sign in with Google</button>
+          <button id="classroomSignOut" class="ghost" style="display:none">Sign out</button>
         </div>
-        <div class="field">
-          <label for="classroomToken">OAuth access token</label>
-          <input type="password" id="classroomToken" placeholder="ya29...">
+        <div class="field-inline" id="classroomPickerRow" style="display:none">
+          <div class="field" style="flex:1">
+            <label for="classroomCoursePicker" class="sr-only">Course</label>
+            <select id="classroomCoursePicker">
+              <option value="">— select a course —</option>
+            </select>
+          </div>
+          <button id="classroomApiImport" class="ghost" disabled>Import roster</button>
         </div>
-        <button id="classroomApiImport" class="ghost">Import via Classroom API</button>
+        <p class="helper" id="classroomStatus"></p>
       </div>
 
       <div class="field-inline">
@@ -165,6 +173,7 @@
     </section>
   </main>
 
+  <script src="https://accounts.google.com/gsi/client" async></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

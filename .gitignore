@@ -3,3 +3,4 @@ data/*.sqlite
 data/*.db
 data/*.sqlite3
 .DS_Store
+.env

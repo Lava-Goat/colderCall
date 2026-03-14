@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -42,6 +43,7 @@ db.exec(`
     period TEXT,
     status TEXT,
     calls INTEGER DEFAULT 0,
+    called_this_cycle INTEGER DEFAULT 0,
     PRIMARY KEY (session_id, id),
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
@@ -72,44 +74,12 @@ ensureColumn("sessions", "default_class_name", "TEXT");
 ensureColumn("sessions", "default_period", "TEXT");
 ensureColumn("students", "class_name", "TEXT");
 ensureColumn("students", "period", "TEXT");
+ensureColumn("students", "called_this_cycle", "INTEGER DEFAULT 0");
 
-async function fetchClassroomJson(endpoint, accessToken, query = {}) {
-  if (typeof fetch !== "function") {
-    throw new Error("Fetch API not available in this Node runtime.");
-  }
-  const url = new URL(`https://classroom.googleapis.com/v1/${endpoint}`);
-  Object.entries(query).forEach(([key, value]) => {
-    if (value != null) url.searchParams.set(key, value);
-  });
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Classroom API error (${response.status}): ${text}`);
-  }
-  return response.json();
-}
-
-async function listClassroomStudents(courseId, accessToken) {
-  let students = [];
-  let pageToken = undefined;
-  do {
-    const data = await fetchClassroomJson(`courses/${courseId}/students`, accessToken, {
-      pageToken,
-      pageSize: 100,
-    });
-    students = students.concat(data.students || []);
-    pageToken = data.nextPageToken;
-  } while (pageToken);
-  return students;
-}
 
 const insertSession = db.prepare(`
   INSERT INTO sessions (id, memo, display_mode, with_replacement, cycle_number, carry_memo, default_class_name, default_period, created_at, updated_at)
-  VALUES (@id, @memo, @display_mode, @with_replacement, @cycle_number, @carry_memo, @default_class_name, @default_period, @created_at, @updated_at)
+  VALUES (@id, @memo, @display_mode, @with_replacement, @cycle_number, @carry_memo, @default_class_name, @default_period, @now, @now)
   ON CONFLICT(id) DO UPDATE SET
     memo=excluded.memo,
     display_mode=excluded.display_mode,
@@ -123,13 +93,13 @@ const insertSession = db.prepare(`
 
 const deleteStudentsForSession = db.prepare("DELETE FROM students WHERE session_id = ?");
 const insertStudent = db.prepare(`
-  INSERT INTO students (id, session_id, full_name, first_name, last_name, class_name, period, status, calls)
-  VALUES (@id, @session_id, @full_name, @first_name, @last_name, @class_name, @period, @status, @calls)
+  INSERT INTO students (id, session_id, full_name, first_name, last_name, class_name, period, status, calls, called_this_cycle)
+  VALUES (@id, @session_id, @full_name, @first_name, @last_name, @class_name, @period, @status, @calls, @called_this_cycle)
 `);
 
 const getSession = db.prepare("SELECT * FROM sessions WHERE id = ?");
 const getStudentsForSession = db.prepare(
-  "SELECT id, full_name, first_name, last_name, class_name, period, status, calls FROM students WHERE session_id = ? ORDER BY rowid ASC"
+  "SELECT id, full_name, first_name, last_name, class_name, period, status, calls, called_this_cycle FROM students WHERE session_id = ? ORDER BY rowid ASC"
 );
 const deleteCycleMemosForSession = db.prepare("DELETE FROM cycle_memos WHERE session_id = ?");
 const insertCycleMemo = db.prepare(
@@ -152,8 +122,7 @@ const saveSession = db.transaction(
       carry_memo: carryMemo ? 1 : 0,
       default_class_name: (defaults && defaults.className) || "",
       default_period: (defaults && defaults.period) || "",
-      created_at: now,
-      updated_at: now,
+      now,
     });
 
     deleteStudentsForSession.run(id);
@@ -168,6 +137,7 @@ const saveSession = db.transaction(
         period: student.period || "",
         status: student.status || "pending",
         calls: Number.isFinite(student.calls) ? student.calls : 0,
+        called_this_cycle: student.calledThisCycle ? 1 : 0,
       });
     });
 
@@ -189,10 +159,17 @@ const saveSession = db.transaction(
 );
 
 app.use(express.json({ limit: "5mb" }));
-app.use(express.static(path.join(__dirname)));
+// Serve only known front-end files, not the entire directory (prevents /data/colderCall.sqlite exposure)
+app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/app.js", (_req, res) => res.sendFile(path.join(__dirname, "app.js")));
+app.get("/styles.css", (_req, res) => res.sendFile(path.join(__dirname, "styles.css")));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, dbPath: DB_PATH });
+});
+
+app.get("/api/config", (_req, res) => {
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
 });
 
 app.post("/api/session", (req, res) => {
@@ -260,36 +237,6 @@ app.get("/api/session/:id", (req, res) => {
   });
 });
 
-app.post("/api/classroom/students", async (req, res) => {
-  const { accessToken, courseId } = req.body || {};
-  if (!accessToken || !courseId) {
-    return res.status(400).json({ error: "accessToken and courseId are required" });
-  }
-  try {
-    const course = await fetchClassroomJson(`courses/${courseId}`, accessToken);
-    const students = await listClassroomStudents(courseId, accessToken);
-    const mapped = students.map((student) => ({
-      id: student.userId || makeId(),
-      fullName: (student.profile && student.profile.name && student.profile.name.fullName) || "",
-      firstName: (student.profile && student.profile.name && student.profile.name.givenName) || "",
-      lastName: (student.profile && student.profile.name && student.profile.name.familyName) || "",
-      className: course.name || "",
-      period: course.section || "",
-      status: "pending",
-      calls: 0,
-      calledThisCycle: false,
-    }));
-    res.json({
-      courseId,
-      courseName: course.name || "",
-      section: course.section || "",
-      students: mapped,
-    });
-  } catch (error) {
-    console.error("Classroom fetch failed", error);
-    res.status(502).json({ error: "Failed to fetch from Google Classroom", detail: error.message });
-  }
-});
 
 app.listen(PORT, () => {
   console.log(`colderCall server running at http://localhost:${PORT}`);
