@@ -169,21 +169,32 @@ const aeriesUpload = multer({
   },
 });
 
+// Maps normalised column header → internal field name.
+// Fields starting with "_" are recognised but not used for student data.
 const AERIES_HEADER_MAP = {
   lastname: "last", last: "last", lname: "last",
   firstname: "first", first: "first", fname: "first",
+  // "Student Name" column (Aeries attendance roster format: "Last, First MI")
   studentname: "full", student: "full", name: "full", fullname: "full",
   per: "period", period: "period", pd: "period",
   course: "className", coursename: "className", coursetitle: "className",
   coursedescription: "className", description: "className",
   class: "className", classname: "className",
   stunum: "_id", studentnumber: "_id", studentid: "_id", perm: "_id", permid: "_id",
-  grade: "_skip", grd: "_skip", gradelevel: "_skip", sex: "_skip", gender: "_skip",
+  gr: "_skip", grade: "_skip", grd: "_skip", gradelevel: "_skip",
+  sex: "_skip", gender: "_skip",
 };
-const AERIES_HEADER_THRESHOLD = 2;
+// Header row must have at least this many recognised columns AND at least one name column.
+const NAME_FIELDS = new Set(["full", "first", "last"]);
 
 function normalizeCol(s) {
   return String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+}
+
+// Extract just the period number from Aeries strings like "2 9:34AM-10:36AM" or "Period 3".
+function extractPeriod(raw) {
+  const m = String(raw).match(/\b(\d+)\b/);
+  return m ? m[1] : String(raw).trim();
 }
 
 function parseAeriesBuffer(buffer, defaults = {}) {
@@ -192,20 +203,54 @@ function parseAeriesBuffer(buffer, defaults = {}) {
   if (!sheetName) throw new Error("No worksheets found in file.");
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
 
-  // Find header row in first 10 rows
+  // ── Step 1: extract class metadata from the Aeries header block ──────────
+  // Aeries attendance rosters have a label row (e.g. "Period", "Course Title")
+  // followed by a value row before the student list.  We capture these so we
+  // can fall back to them for period/class when those columns are absent in the
+  // student data section.
+  let metaPeriod = defaults.period || "";
+  let metaClassName = defaults.className || "";
+
+  for (let r = 0; r < Math.min(8, rows.length); r++) {
+    const labelRow = rows[r];
+    const valueRow = rows[r + 1] || [];
+    const periodLabelIdx = labelRow.findIndex((c) => normalizeCol(c) === "period");
+    const courseLabelIdx = labelRow.findIndex((c) =>
+      ["coursetitle", "course", "coursename", "coursedescription"].includes(normalizeCol(c))
+    );
+    if (periodLabelIdx !== -1 || courseLabelIdx !== -1) {
+      if (periodLabelIdx !== -1 && !metaPeriod) {
+        const raw = String(valueRow[periodLabelIdx] || "").trim();
+        if (raw) metaPeriod = extractPeriod(raw);
+      }
+      if (courseLabelIdx !== -1 && !metaClassName) {
+        metaClassName = String(valueRow[courseLabelIdx] || "").trim();
+      }
+      // Don't break — there may be multiple such blocks on a multi-class export
+    }
+  }
+
+  // ── Step 2: find the student data header row ──────────────────────────────
+  // Must have ≥ 1 recognised name column (full/first/last) to avoid matching
+  // the class metadata label row that also contains "Period", "Course Title".
   let headerRowIdx = -1;
   let fieldMap = {};
-  for (let r = 0; r < Math.min(10, rows.length); r++) {
+
+  for (let r = 0; r < rows.length; r++) {
     const candidate = {};
     let hits = 0;
+    let hasName = false;
     rows[r].forEach((cell, colIdx) => {
       const field = AERIES_HEADER_MAP[normalizeCol(cell)];
       if (field) {
         hits++;
-        if (!field.startsWith("_")) candidate[colIdx] = field;
+        if (!field.startsWith("_")) {
+          candidate[colIdx] = field;
+          if (NAME_FIELDS.has(field)) hasName = true;
+        }
       }
     });
-    if (hits >= AERIES_HEADER_THRESHOLD) {
+    if (hits >= 2 && hasName) {
       headerRowIdx = r;
       fieldMap = candidate;
       break;
@@ -230,14 +275,20 @@ function parseAeriesBuffer(buffer, defaults = {}) {
 
     let first = get(row, "first");
     let last = get(row, "last");
-    let full = get(row, "full");
-    const className = get(row, "className") || defaults.className || "";
-    const period = get(row, "period") || defaults.period || "";
+    // Strip leading * Aeries uses to mark certain students (e.g. IEP/504)
+    let full = get(row, "full").replace(/^\*+/, "").trim();
+    if (first) first = first.replace(/^\*+/, "").trim();
+    if (last) last = last.replace(/^\*+/, "").trim();
 
-    // Handle "Last, First" combined column
+    const className = get(row, "className") || metaClassName;
+    const period = get(row, "period") || metaPeriod;
+
+    // Handle "Last, First MI" combined column
     if (full && !first && !last) {
       if (full.includes(",")) {
         [last, first] = full.split(",").map((s) => s.trim());
+        // Strip trailing middle initial (single letter, optionally followed by ".")
+        first = first.replace(/\s+[A-Z]\.?$/, "").trim();
         full = `${first} ${last}`.trim();
       }
     } else if (first || last) {
