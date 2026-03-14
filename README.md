@@ -152,7 +152,7 @@ The database file is excluded from static file serving and from version control.
 
 [GNU Affero General Public License v3.0](LICENSE)
 
-Copyright © 2026 Jon-Erik G. Storm
+Copyright © 2026 Jon-Erik G. Storm, Inc., a California Corporation Doing Business As "Lava Goat Software"
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
