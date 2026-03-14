@@ -122,6 +122,15 @@
         <p class="helper">Each cycle keeps its own memo; when you reset, you can keep or clear it.</p>
       </div>
 
+      <div class="field">
+        <label>Groups</label>
+        <div class="field-inline">
+          <input type="text" id="groupNameInput" placeholder="Group name" style="flex:1">
+          <button id="createGroupBtn" class="ghost">Create group</button>
+        </div>
+        <div id="groupList" class="aeries-class-list"></div>
+      </div>
+
       <div class="field-inline">
         <button id="resetCycle" class="ghost">Reset cycle</button>
         <button id="clearRoster" class="ghost danger">Clear roster</button>
@@ -136,6 +145,13 @@
           <button id="undoButton" class="ghost">Go back</button>
           <button id="popOut" class="ghost">Pop out</button>
         </div>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label for="filterPicker">Active pool</label>
+        <select id="filterPicker">
+          <option value="all">All students</option>
+        </select>
       </div>
 
       <div class="callout" id="currentStudentCallout">
@@ -178,6 +194,7 @@
               <th>Status</th>
               <th>Calls</th>
               <th>Last outcome</th>
+              <th>Groups</th>
               <th></th>
             </tr>
           </thead>

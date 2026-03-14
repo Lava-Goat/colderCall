@@ -74,14 +74,15 @@ ensureColumn("sessions", "cycle_number", "INTEGER DEFAULT 1");
 ensureColumn("sessions", "carry_memo", "INTEGER DEFAULT 0");
 ensureColumn("sessions", "default_class_name", "TEXT");
 ensureColumn("sessions", "default_period", "TEXT");
+ensureColumn("sessions", "groups", "TEXT DEFAULT '[]'");
 ensureColumn("students", "class_name", "TEXT");
 ensureColumn("students", "period", "TEXT");
 ensureColumn("students", "called_this_cycle", "INTEGER DEFAULT 0");
 
 
 const insertSession = db.prepare(`
-  INSERT INTO sessions (id, memo, display_mode, with_replacement, cycle_number, carry_memo, default_class_name, default_period, created_at, updated_at)
-  VALUES (@id, @memo, @display_mode, @with_replacement, @cycle_number, @carry_memo, @default_class_name, @default_period, @now, @now)
+  INSERT INTO sessions (id, memo, display_mode, with_replacement, cycle_number, carry_memo, default_class_name, default_period, groups, created_at, updated_at)
+  VALUES (@id, @memo, @display_mode, @with_replacement, @cycle_number, @carry_memo, @default_class_name, @default_period, @groups, @now, @now)
   ON CONFLICT(id) DO UPDATE SET
     memo=excluded.memo,
     display_mode=excluded.display_mode,
@@ -90,6 +91,7 @@ const insertSession = db.prepare(`
     carry_memo=excluded.carry_memo,
     default_class_name=excluded.default_class_name,
     default_period=excluded.default_period,
+    groups=excluded.groups,
     updated_at=excluded.updated_at
 `);
 
@@ -112,7 +114,7 @@ const getCycleMemos = db.prepare(
 );
 
 const saveSession = db.transaction(
-  ({ sessionId, memo, displayMode, withReplacement, students, cycleNumber, memoHistory, carryMemo, defaults }) => {
+  ({ sessionId, memo, displayMode, withReplacement, students, cycleNumber, memoHistory, carryMemo, defaults, groups }) => {
     const now = new Date().toISOString();
     const id = sessionId || makeId();
     insertSession.run({
@@ -124,6 +126,7 @@ const saveSession = db.transaction(
       carry_memo: carryMemo ? 1 : 0,
       default_class_name: (defaults && defaults.className) || "",
       default_period: (defaults && defaults.period) || "",
+      groups: JSON.stringify(Array.isArray(groups) ? groups : []),
       now,
     });
 
@@ -362,6 +365,7 @@ app.post("/api/session", (req, res) => {
     memoHistory = [],
     carryMemo = false,
     defaults = { className: "", period: "" },
+    groups = [],
   } = req.body || {};
 
   if (!Array.isArray(students)) {
@@ -379,6 +383,7 @@ app.post("/api/session", (req, res) => {
       memoHistory,
       carryMemo,
       defaults,
+      groups,
     });
     res.json({ sessionId: id });
   } catch (error) {
@@ -405,6 +410,7 @@ app.get("/api/session/:id", (req, res) => {
       className: session.default_class_name || "",
       period: session.default_period || "",
     },
+    groups: JSON.parse(session.groups || "[]"),
     memoHistory: memos.map((row) => ({
       cycle: row.cycle_number,
       memo: row.memo,
