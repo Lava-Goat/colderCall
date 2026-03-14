@@ -163,6 +163,9 @@ app.use(express.json({ limit: "5mb" }));
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/app.js", (_req, res) => res.sendFile(path.join(__dirname, "app.js")));
 app.get("/styles.css", (_req, res) => res.sendFile(path.join(__dirname, "styles.css")));
+app.get("/xlsx.full.min.js", (_req, res) =>
+  res.sendFile(path.join(__dirname, "node_modules/xlsx/dist/xlsx.full.min.js"))
+);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, dbPath: DB_PATH });
