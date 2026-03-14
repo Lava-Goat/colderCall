@@ -5,7 +5,7 @@ const fs = require("fs");
 const { randomUUID } = require("crypto");
 const Database = require("better-sqlite3");
 const multer = require("multer");
-const ExcelJS = require("exceljs");
+const XLSX = require("@e965/xlsx");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -186,21 +186,11 @@ function normalizeCol(s) {
   return String(s || "").toLowerCase().replace(/[^a-z]/g, "");
 }
 
-async function parseAeriesBuffer(buffer, defaults = {}) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) throw new Error("No worksheets found in file.");
-
-  // Collect all rows as string arrays
-  const rows = [];
-  worksheet.eachRow({ includeEmpty: true }, (row) => {
-    const cells = [];
-    for (let c = 1; c <= worksheet.columnCount; c++) {
-      cells.push(String(row.getCell(c).text || "").trim());
-    }
-    rows.push(cells);
-  });
+function parseAeriesBuffer(buffer, defaults = {}) {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error("No worksheets found in file.");
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
 
   // Find header row in first 10 rows
   let headerRowIdx = -1;
@@ -228,7 +218,7 @@ async function parseAeriesBuffer(buffer, defaults = {}) {
 
   const get = (row, field) => {
     for (const [colIdx, f] of Object.entries(fieldMap)) {
-      if (f === field) return row[colIdx] || "";
+      if (f === field) return String(row[colIdx] || "").trim();
     }
     return "";
   };
@@ -236,7 +226,7 @@ async function parseAeriesBuffer(buffer, defaults = {}) {
   const students = [];
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r];
-    if (row.every((c) => c === "")) continue;
+    if (row.every((c) => String(c).trim() === "")) continue;
 
     let first = get(row, "first");
     let last = get(row, "last");
@@ -286,7 +276,7 @@ app.get("/api/config", (_req, res) => {
   res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
 });
 
-app.post("/api/parse/aeries", aeriesUpload.single("file"), async (req, res) => {
+app.post("/api/parse/aeries", aeriesUpload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded or file is not an XLSX." });
   }
@@ -295,7 +285,7 @@ app.post("/api/parse/aeries", aeriesUpload.single("file"), async (req, res) => {
     period: (req.body && req.body.defaultPeriod) || "",
   };
   try {
-    const students = await parseAeriesBuffer(req.file.buffer, defaults);
+    const students = parseAeriesBuffer(req.file.buffer, defaults);
     res.json({ students });
   } catch (err) {
     console.error("Aeries parse failed", err);

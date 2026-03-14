@@ -8,9 +8,9 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.3",
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.3.1",
-    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "multer": "^2.1.1"
   }
