@@ -3,6 +3,8 @@ const storageKey = "colderCall-state-v1";
 const elements = {
   rosterUpload: document.getElementById("rosterUpload"),
   aeriesUpload: document.getElementById("aeriesUpload"),
+  aeriesClassPicker: document.getElementById("aeriesClassPicker"),
+  aeriesClassList: document.getElementById("aeriesClassList"),
   addStudent: document.getElementById("addStudent"),
   firstNameInput: document.getElementById("firstNameInput"),
   lastNameInput: document.getElementById("lastNameInput"),
@@ -423,10 +425,33 @@ function handleRosterUpload(event) {
     });
 }
 
+function showAeriesClassPicker(classes) {
+  elements.aeriesClassList.innerHTML = "";
+  classes.forEach((cls) => {
+    const row = document.createElement("div");
+    row.className = "aeries-class-row";
+    const label = document.createElement("span");
+    label.textContent = `Per ${cls.period} — ${cls.className} (${cls.students.length} students)`;
+    const btn = document.createElement("button");
+    btn.className = "ghost";
+    btn.textContent = "Import";
+    btn.addEventListener("click", () => {
+      addStudents(cls.students);
+      elements.aeriesClassPicker.style.display = "none";
+      elements.aeriesClassList.innerHTML = "";
+    });
+    row.appendChild(label);
+    row.appendChild(btn);
+    elements.aeriesClassList.appendChild(row);
+  });
+  elements.aeriesClassPicker.style.display = "";
+}
+
 async function handleAeriesUpload(event) {
   const [file] = event.target.files;
   if (!file) return;
   event.target.disabled = true;
+  elements.aeriesClassPicker.style.display = "none";
   const defaults = getDefaults();
   try {
     const form = new FormData();
@@ -436,11 +461,15 @@ async function handleAeriesUpload(event) {
     const res = await fetch("/api/parse/aeries", { method: "POST", body: form });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || "Server error");
-    if (!payload.students || !payload.students.length) {
+    if (!payload.classes || !payload.classes.length) {
       alert("No students found in that Aeries file. Check that it is a standard class roster export.");
       return;
     }
-    addStudents(payload.students);
+    if (payload.classes.length === 1) {
+      addStudents(payload.classes[0].students);
+    } else {
+      showAeriesClassPicker(payload.classes);
+    }
   } catch (err) {
     alert(`Unable to import Aeries file: ${err.message}`);
   } finally {

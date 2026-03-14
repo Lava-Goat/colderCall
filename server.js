@@ -307,7 +307,17 @@ function parseAeriesBuffer(buffer, defaults = {}) {
     throw new Error("Could not find a recognised Aeries header row. Make sure this is a standard class roster export.");
   }
 
-  return students;
+  // Group by period + className so the client can present a picker
+  const classMap = new Map();
+  for (const student of students) {
+    const key = `${student.period}|||${student.className}`;
+    if (!classMap.has(key)) {
+      classMap.set(key, { period: student.period, className: student.className, students: [] });
+    }
+    classMap.get(key).students.push(student);
+  }
+
+  return Array.from(classMap.values());
 }
 
 app.use(express.json({ limit: "5mb" }));
@@ -333,8 +343,8 @@ app.post("/api/parse/aeries", aeriesUpload.single("file"), (req, res) => {
     period: (req.body && req.body.defaultPeriod) || "",
   };
   try {
-    const students = parseAeriesBuffer(req.file.buffer, defaults);
-    res.json({ students });
+    const classes = parseAeriesBuffer(req.file.buffer, defaults);
+    res.json({ classes });
   } catch (err) {
     console.error("Aeries parse failed", err);
     res.status(422).json({ error: err.message });
