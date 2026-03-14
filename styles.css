@@ -128,10 +128,15 @@ body {
 
 header.app-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow);
 }
 
 h1 {
@@ -174,10 +179,6 @@ body.popout-mode .wide {
   display: none;
 }
 
-body.popout-detached .pick-panel {
-  opacity: 0.35;
-  pointer-events: none;
-}
 
 .panel {
   background: var(--panel);
@@ -463,6 +464,14 @@ tr:hover td {
 /* Collapsible panels */
 .panel.collapsed .panel-body {
   display: none;
+}
+
+.panel.collapsed .panel-header {
+  margin-bottom: 0;
+}
+
+.panel.wide.collapsed {
+  grid-column: auto;
 }
 
 /* Popout mode — display-only name screen */
