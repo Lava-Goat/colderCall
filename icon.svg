@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#12283d"/>
+      <stop offset="100%" stop-color="#071520"/>
+    </linearGradient>
+    <linearGradient id="ice" x1="0" y1="0" x2="0.5" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#e8f8ff"/>
+      <stop offset="60%" stop-color="#a8dcf0"/>
+      <stop offset="100%" stop-color="#6cc0de"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.75  0 0 0 0 1  0 0 0 0.55 0" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+
+  <!-- Background ice fracture lines -->
+  <g stroke="#1e3a55" stroke-width="1" opacity="0.5" fill="none">
+    <line x1="150" y1="100" x2="300" y2="220"/><line x1="150" y1="100" x2="80" y2="250"/>
+    <line x1="780" y1="150" x2="900" y2="80"/><line x1="780" y1="150" x2="850" y2="300"/>
+    <line x1="200" y1="820" x2="120" y2="950"/><line x1="200" y1="820" x2="350" y2="900"/>
+    <line x1="850" y1="800" x2="950" y2="900"/>
+  </g>
+
+  <!-- Ice hand -->
+  <g filter="url(#glow)">
+    <!-- Index finger -->
+    <rect x="337" y="208" width="78" height="362" rx="39" fill="url(#ice)"/>
+    <!-- Middle finger (tallest) -->
+    <rect x="425" y="183" width="80" height="390" rx="40" fill="url(#ice)"/>
+    <!-- Ring finger -->
+    <rect x="515" y="220" width="78" height="358" rx="39" fill="url(#ice)"/>
+    <!-- Pinky -->
+    <rect x="603" y="292" width="68" height="286" rx="34" fill="url(#ice)"/>
+    <!-- Palm -->
+    <rect x="305" y="545" width="400" height="280" rx="55" fill="url(#ice)"/>
+    <!-- Thumb -->
+    <rect x="228" y="592" width="98" height="188" rx="49" fill="url(#ice)" transform="rotate(-28 277 686)"/>
+  </g>
+
+  <!-- Ice cracks on palm -->
+  <g stroke="#ffffff" stroke-width="1.2" opacity="0.22" fill="none">
+    <path d="M 420 600 L 455 658 L 488 642 L 518 700"/>
+    <path d="M 552 592 L 572 648 L 612 628"/>
+    <path d="M 382 682 L 418 720 L 402 762"/>
+    <line x1="374" y1="282" x2="374" y2="420"/>
+    <line x1="462" y1="252" x2="462" y2="398"/>
+    <line x1="552" y1="292" x2="552" y2="418"/>
+  </g>
+
+  <!-- Main ice crystal — palm center -->
+  <g stroke="#c8eeff" stroke-width="2.2" opacity="0.6" fill="none">
+    <line x1="500" y1="648" x2="500" y2="712"/>
+    <line x1="469" y1="663" x2="531" y2="697"/>
+    <line x1="469" y1="697" x2="531" y2="663"/>
+    <line x1="500" y1="638" x2="500" y2="625"/>
+    <line x1="500" y1="722" x2="500" y2="735"/>
+    <line x1="459" y1="657" x2="448" y2="650"/>
+    <line x1="541" y1="703" x2="552" y2="710"/>
+    <line x1="459" y1="703" x2="448" y2="710"/>
+    <line x1="541" y1="657" x2="552" y2="650"/>
+  </g>
+
+  <!-- Small crystal — middle fingertip -->
+  <g stroke="#b8eaff" stroke-width="1.6" opacity="0.48" fill="none">
+    <line x1="465" y1="288" x2="465" y2="322"/>
+    <line x1="448" y1="297" x2="482" y2="313"/>
+    <line x1="448" y1="313" x2="482" y2="297"/>
+    <line x1="465" y1="282" x2="465" y2="276"/>
+    <line x1="465" y1="328" x2="465" y2="334"/>
+  </g>
+
+  <!-- Finger highlight sheens -->
+  <g fill="white" opacity="0.16">
+    <rect x="337" y="208" width="20" height="320" rx="10"/>
+    <rect x="425" y="183" width="20" height="350" rx="10"/>
+    <rect x="515" y="220" width="20" height="310" rx="10"/>
+    <rect x="603" y="292" width="17" height="250" rx="8"/>
+  </g>
+
+  <!-- Palm highlight -->
+  <ellipse cx="368" cy="588" rx="58" ry="22" fill="white" opacity="0.09" transform="rotate(-8 368 588)"/>
+
+  <!-- Sparkle dots -->
+  <g fill="white">
+    <circle cx="356" cy="358" r="3.2" opacity="0.72"/>
+    <circle cx="634" cy="418" r="2.6" opacity="0.62"/>
+    <circle cx="478" cy="248" r="2.1" opacity="0.82"/>
+    <circle cx="392" cy="728" r="3.0" opacity="0.52"/>
+    <circle cx="618" cy="678" r="2.4" opacity="0.62"/>
+    <circle cx="322" cy="678" r="2.0" opacity="0.55"/>
+    <circle cx="668" cy="558" r="2.0" opacity="0.50"/>
+    <circle cx="460" cy="448" r="1.8" opacity="0.52"/>
+    <circle cx="550" cy="368" r="1.5" opacity="0.62"/>
+  </g>
+
+  <!-- Corner ice shards — top right -->
+  <g opacity="0.28">
+    <polygon points="840,78 892,142 800,162 768,98" fill="#4ab8d8"/>
+    <polygon points="902,58 934,102 876,90" fill="#7dd4e8"/>
+  </g>
+
+  <!-- Corner ice shards — bottom left -->
+  <g opacity="0.22">
+    <polygon points="118,858 160,922 88,942" fill="#4ab8d8"/>
+    <polygon points="182,902 224,962 142,972 110,912" fill="#3a9ab8"/>
+  </g>
+</svg>
