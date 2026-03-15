@@ -179,6 +179,11 @@ body.popout-mode .wide {
   display: none;
 }
 
+/* Override collapsed-panel display:flex so the roster stays hidden in popout */
+body.popout-mode #rosterPanel {
+  display: none;
+}
+
 
 .panel {
   background: var(--panel);
