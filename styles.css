@@ -500,7 +500,17 @@ tr:hover td {
 }
 
 .panel.wide.collapsed {
-  grid-column: auto;
+  grid-column: 1 / -1;
+}
+
+/* Shrink the roster column when it is collapsed (issue #12) */
+.layout:has(#rosterPanel.collapsed) {
+  grid-template-columns: auto minmax(360px, 2fr);
+}
+
+/* Collapsible sub-sections inside panels (issue #11) */
+#addStudentBody.collapsed {
+  display: none;
 }
 
 /* Popout mode — display-only name screen */
