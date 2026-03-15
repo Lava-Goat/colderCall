@@ -1,6 +1,7 @@
 services:
   coldercall:
     build: .
+    user: "1000:1000"
     ports:
       - "127.0.0.1:16767:3000"
     volumes:
