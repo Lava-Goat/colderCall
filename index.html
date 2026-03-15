@@ -85,24 +85,33 @@
         <p class="helper" id="classroomStatus"></p>
       </div>
 
-      <div class="field-inline">
-        <div class="field">
-          <label for="firstNameInput">Add student</label>
-          <input type="text" id="firstNameInput" placeholder="First name">
+      <!-- Issue #11: collapsible add-student section -->
+      <div class="field">
+        <div class="field-inline" style="align-items:center;margin-bottom:4px">
+          <label style="margin-bottom:0">Add student</label>
+          <button class="ghost icon-btn" id="collapseAddStudent" title="Toggle">▾</button>
         </div>
-        <div class="field">
-          <label for="lastNameInput" class="sr-only">Last name</label>
-          <input type="text" id="lastNameInput" placeholder="Last name">
+        <div id="addStudentBody">
+          <div class="field-inline">
+            <div class="field">
+              <label for="firstNameInput" class="sr-only">First name</label>
+              <input type="text" id="firstNameInput" placeholder="First name">
+            </div>
+            <div class="field">
+              <label for="lastNameInput" class="sr-only">Last name</label>
+              <input type="text" id="lastNameInput" placeholder="Last name">
+            </div>
+            <div class="field">
+              <label for="classNameInput" class="sr-only">Class</label>
+              <input type="text" id="classNameInput" placeholder="Class name">
+            </div>
+            <div class="field">
+              <label for="periodInput" class="sr-only">Period</label>
+              <input type="text" id="periodInput" placeholder="Period">
+            </div>
+            <button id="addStudent" class="ghost">Add</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="classNameInput" class="sr-only">Class</label>
-          <input type="text" id="classNameInput" placeholder="Class name">
-        </div>
-        <div class="field">
-          <label for="periodInput" class="sr-only">Period</label>
-          <input type="text" id="periodInput" placeholder="Period">
-        </div>
-        <button id="addStudent" class="ghost">Add</button>
       </div>
 
       <div class="field">
@@ -116,24 +125,19 @@
       </div>
 
       <div class="field">
-        <label for="memo">Memo for this cycle</label>
-        <textarea id="memo" rows="3" placeholder="What are you asking about today?"></textarea>
-        <label class="toggle">
-          <input type="checkbox" id="carryMemo">
-          <span>Keep memo when starting next cycle</span>
-        </label>
-        <p class="helper">Each cycle keeps its own memo; when you reset, you can keep or clear it.</p>
-      </div>
-
-      <div class="field">
         <label>Groups</label>
         <div class="field-inline">
           <input type="text" id="groupNameInput" placeholder="Group name" style="flex:1">
           <button id="createGroupBtn" class="ghost">Create group</button>
         </div>
-        <div class="field-inline" id="groupFromClassRow" style="display:none">
-          <select id="groupFromClassSelect" style="flex:1"></select>
-          <button id="groupFromClassBtn" class="ghost">Create group from class</button>
+        <!-- Issue #10: multi-class group creator -->
+        <div id="groupFromClassRow" style="display:none">
+          <p class="helper" style="margin-bottom:4px">Create group from classes:</p>
+          <div id="groupFromClassList" class="aeries-class-list" style="margin-bottom:6px"></div>
+          <div class="field-inline">
+            <input type="text" id="groupFromClassNameInput" placeholder="Group name (auto if blank)" style="flex:1">
+            <button id="groupFromClassBtn" class="ghost">Create group from selected</button>
+          </div>
         </div>
         <div id="groupList" class="aeries-class-list"></div>
       </div>
@@ -177,6 +181,16 @@
         <button data-outcome="absent" class="status-btn danger">Absent</button>
         <button data-outcome="reset" class="status-btn">Reset status</button>
       </div>
+
+      <!-- Issue #9: memo lives in the pick panel -->
+      <div class="field" style="margin-top:14px">
+        <label for="memo">Memo for this cycle</label>
+        <textarea id="memo" rows="3" placeholder="What are you asking about today?"></textarea>
+        <label class="toggle">
+          <input type="checkbox" id="carryMemo">
+          <span>Keep memo when starting next cycle</span>
+        </label>
+      </div>
     </section>
 
     <section class="panel wide" id="classListPanel">
@@ -215,6 +229,6 @@
 
   <button id="fullscreenBtn" class="ghost icon-btn" title="Fullscreen">⛶</button>
   <script src="https://accounts.google.com/gsi/client" async></script>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
