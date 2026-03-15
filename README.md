@@ -1,5 +1,7 @@
 # colderCall
 
+Cold calls. But even cooler.
+
 A lightweight, self-hosted cold-calling tool for teachers. Upload a class roster, pick students at random, record outcomes, and keep notes — all in the browser, with data stored locally in SQLite.
 
 Built to stay out of your way during class. No accounts, no subscriptions, no cloud.
