@@ -1,11 +1,22 @@
 {
   "name": "coldercall",
-  "version": "1.0.0",
+  "version": "1.0.0a1",
   "private": true,
   "description": "colderCall - browser app with server-side SQLite storage",
-  "main": "server.js",
+  "author": "Jon-Erik G. Storm, Inc.",
+  "main": "electron.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "electron": "npx @electron/rebuild -f -w better-sqlite3 && electron .",
+    "rebuild:electron": "npx @electron/rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3",
+    "dist": "npx @electron/rebuild -f -w better-sqlite3 && electron-builder --mac --win --linux",
+    "dist:mac": "npx @electron/rebuild -f -w better-sqlite3 && electron-builder --mac",
+    "dist:mac:arm64": "npx @electron/rebuild -f -w better-sqlite3 --arch arm64 && electron-builder --mac --arm64",
+    "dist:mac:x64": "npx @electron/rebuild -f -w better-sqlite3 --arch x64 && electron-builder --mac --x64",
+    "dist:mac:universal": "npx @electron/rebuild -f -w better-sqlite3 && electron-builder --mac --universal",
+    "dist:win": "npx @electron/rebuild -f -w better-sqlite3 && electron-builder --win",
+    "dist:linux": "npx @electron/rebuild -f -w better-sqlite3 && electron-builder --linux"
   },
   "dependencies": {
     "@e965/xlsx": "^0.20.3",
@@ -13,5 +24,40 @@
     "dotenv": "^17.3.1",
     "express": "^4.19.2",
     "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.coldercall.app",
+    "productName": "colderCall",
+    "copyright": "Copyright © 2025 Jon-Erik G. Storm, Inc.",
+    "files": [
+      "electron.js",
+      "server.js",
+      "app.js",
+      "index.html",
+      "styles.css",
+      "node_modules/**/*",
+      "!node_modules/**/*.map"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/**/*.node"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.education",
+      "icon": "icon.icns"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

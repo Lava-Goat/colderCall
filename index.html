@@ -226,6 +226,17 @@
   </main>
 
   <button id="fullscreenBtn" class="ghost icon-btn" title="Fullscreen">⛶</button>
+  <!-- Load session dialog (replaces window.prompt, which is unsupported in Electron) -->
+  <dialog id="loadSessionDialog" style="border:none;border-radius:12px;padding:28px 32px;min-width:340px;background:var(--panel,#fff);color:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+    <p style="margin:0 0 14px;font-weight:600;font-size:1rem;">Load session</p>
+    <p style="margin:0 0 14px;font-size:.875rem;opacity:.7;">Enter a session ID to restore:</p>
+    <input id="loadSessionInput" type="text" placeholder="Session ID" style="width:100%;box-sizing:border-box;margin-bottom:18px;padding:8px 10px;border-radius:6px;border:1px solid var(--border,#ccc);font-family:inherit;font-size:.9rem;"/>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button id="loadSessionCancel" class="ghost">Cancel</button>
+      <button id="loadSessionOk" class="primary">Load</button>
+    </div>
+  </dialog>
+
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script type="module" src="app.js?v=4"></script>
 </body>
