@@ -23,6 +23,11 @@ COPY server.js app.js index.html styles.css ./
 # SQLite data lives here; mount a volume to persist it
 VOLUME ["/app/data"]
 
+# Run as the built-in non-root node user (UID 1000).
+# The host bind-mount directory must be owned by UID 1000 (jonerik).
+RUN chown -R node:node /app
+USER node
+
 ENV PORT=3000
 EXPOSE 3000
 
