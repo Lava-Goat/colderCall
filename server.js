@@ -330,7 +330,7 @@ app.get("/app.js", (_req, res) => res.sendFile(path.join(__dirname, "app.js")));
 app.get("/styles.css", (_req, res) => res.sendFile(path.join(__dirname, "styles.css")));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, dbPath: DB_PATH });
+  res.json({ ok: true });
 });
 
 app.get("/api/config", (_req, res) => {

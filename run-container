@@ -1,0 +1,12 @@
+# Ensure the data directory exists and is accessible only by its owner (UID 1000 = jonerik/node).
+# This is required for California Ed Code §49073.1 / SOPIPA compliance.
+DATA_DIR=/home/jonerik/docker/coldercall/data
+mkdir -p "$DATA_DIR"
+chmod 700 "$DATA_DIR"
+
+docker run -d --name coldercall \
+  --user 1000:1000 \
+  -p 127.0.0.1:16767:3000 \
+  -v "$DATA_DIR":/app/data \
+  -e GOOGLE_CLIENT_ID=842781477229-e1ec7lnnf44kd82rjcu469qfl3smf7m3.apps.googleusercontent.com \
+  coldercall
