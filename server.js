@@ -9,7 +9,7 @@ const XLSX = require("@e965/xlsx");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const DB_PATH = path.join(DATA_DIR, "colderCall.sqlite");
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -423,6 +423,11 @@ app.get("/api/session/:id", (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-  console.log(`colderCall server running at http://localhost:${PORT}`);
+const serverReady = new Promise((resolve) => {
+  app.listen(PORT, () => {
+    console.log(`colderCall server running at http://localhost:${PORT}`);
+    resolve();
+  });
 });
+
+module.exports = { serverReady };

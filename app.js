@@ -1433,8 +1433,31 @@ function toCsv() {
   downloadFile("colderCall.csv", csv, "text/csv");
 }
 
+function showLoadSessionDialog() {
+  return new Promise((resolve) => {
+    const dlg = document.getElementById('loadSessionDialog');
+    const input = document.getElementById('loadSessionInput');
+    const okBtn = document.getElementById('loadSessionOk');
+    const cancelBtn = document.getElementById('loadSessionCancel');
+    input.value = '';
+    const finish = (value) => {
+      dlg.close();
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(value || null);
+    };
+    const onOk = () => finish(input.value.trim());
+    const onCancel = () => finish(null);
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); }, { once: false });
+    dlg.showModal();
+    input.focus();
+  });
+}
+
 async function loadFromServer() {
-  const id = prompt("Enter session ID to load:");
+  const id = await showLoadSessionDialog();
   if (!id) return;
   elements.loadServer.disabled = true;
   setServerStatus("Loading…", "warn");
