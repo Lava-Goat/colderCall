@@ -987,8 +987,8 @@ function renderGroups() {
 
 function renderGroupFromClassPicker() {
   const row = document.getElementById("groupFromClassRow");
-  const sel = document.getElementById("groupFromClassSelect");
-  if (!row || !sel) return;
+  const list = document.getElementById("groupFromClassList");
+  if (!row || !list) return;
 
   const classMap = new Map();
   state.students.forEach((s) => {
@@ -1001,24 +1001,54 @@ function renderGroupFromClassPicker() {
     return;
   }
 
+  // Preserve checked state across re-renders
+  const prevChecked = new Set(
+    Array.from(list.querySelectorAll("input[type=checkbox]:checked")).map((cb) => cb.value)
+  );
+
   row.style.display = "";
-  sel.innerHTML = "";
+  list.innerHTML = "";
   classMap.forEach(({ period, className }, key) => {
-    const opt = document.createElement("option");
-    opt.value = key;
+    const item = document.createElement("div");
+    item.className = "aeries-class-row";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = key;
+    cb.id = `gfc-${CSS.escape(key)}`;
+    cb.checked = prevChecked.has(key);
+    cb.style.cssText = "width:16px;height:16px;flex-shrink:0;cursor:pointer;";
+
+    const lbl = document.createElement("label");
+    lbl.htmlFor = cb.id;
+    lbl.style.cssText = "flex:1;cursor:pointer;";
     const parts = [period && `Per ${period}`, className].filter(Boolean);
-    opt.textContent = parts.join(" · ") || "Unknown class";
-    sel.appendChild(opt);
+    lbl.textContent = parts.join(" · ") || "Unknown class";
+
+    item.appendChild(cb);
+    item.appendChild(lbl);
+    list.appendChild(item);
   });
 }
 
 function createGroupFromClass() {
-  const sel = document.getElementById("groupFromClassSelect");
-  if (!sel || !sel.value) return;
-  const key = sel.value;
-  const [period, className] = key.split("|||");
-  const nameParts = [className, period && `Per ${period}`].filter(Boolean);
-  const name = nameParts.join(" ") || "Class group";
+  const list = document.getElementById("groupFromClassList");
+  const nameInput = document.getElementById("groupFromClassNameInput");
+  if (!list) return;
+
+  const selectedKeys = Array.from(
+    list.querySelectorAll("input[type=checkbox]:checked")
+  ).map((cb) => cb.value);
+
+  if (!selectedKeys.length) { alert("Select at least one class."); return; }
+
+  let name = nameInput ? nameInput.value.trim() : "";
+  if (!name) {
+    name = selectedKeys.map((key) => {
+      const [period, className] = key.split("|||");
+      return [className, period && `Per ${period}`].filter(Boolean).join(" ");
+    }).join(" + ") || "Class group";
+  }
 
   if (state.groups.find((g) => g.name === name)) {
     alert(`A group named "${name}" already exists.`);
@@ -1026,11 +1056,13 @@ function createGroupFromClass() {
   }
 
   const studentIds = state.students
-    .filter((s) => `${s.period}|||${s.className}` === key)
+    .filter((s) => selectedKeys.includes(`${s.period}|||${s.className}`))
     .map((s) => s.id);
 
   pushHistory();
   state.groups.push({ id: randomId(), name, studentIds });
+  if (nameInput) nameInput.value = "";
+  list.querySelectorAll("input[type=checkbox]").forEach((cb) => { cb.checked = false; });
   markDirty();
   persistState();
   renderGroups();
@@ -1528,6 +1560,12 @@ function loadCollapseState() {
       if (panel) panel.classList.add("collapsed");
       if (btn) btn.textContent = "▸";
     }
+    // Restore add-student sub-section collapse (issue #11)
+    if (saved["addStudentBody"]) {
+      document.getElementById("addStudentBody")?.classList.add("collapsed");
+      const btn = document.getElementById("collapseAddStudent");
+      if (btn) btn.textContent = "▸";
+    }
   } catch {}
 }
 
@@ -1642,6 +1680,18 @@ function init() {
   loadCollapseState();
   document.getElementById("collapseRoster")?.addEventListener("click", () => toggleCollapse("rosterPanel", "collapseRoster"));
   document.getElementById("collapseClassList")?.addEventListener("click", () => toggleCollapse("classListPanel", "collapseClassList"));
+  document.getElementById("collapseAddStudent")?.addEventListener("click", () => {
+    const body = document.getElementById("addStudentBody");
+    const btn = document.getElementById("collapseAddStudent");
+    if (!body) return;
+    const isCollapsed = body.classList.toggle("collapsed");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
+      saved["addStudentBody"] = isCollapsed;
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(saved));
+    } catch {}
+  });
   const fullscreenBtn = document.getElementById("fullscreenBtn");
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener("click", () => {
