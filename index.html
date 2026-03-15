@@ -26,13 +26,7 @@
     <section class="panel" id="rosterPanel">
       <div class="panel-header">
         <h2>Roster & setup</h2>
-        <div class="actions-row">
-          <label class="toggle">
-            <input type="checkbox" id="withReplacement">
-            <span>Allow repeats</span>
-          </label>
-          <button class="collapse-btn ghost icon-btn" id="collapseRoster" title="Collapse">▾</button>
-        </div>
+        <button class="collapse-btn ghost icon-btn" id="collapseRoster" title="Collapse">▾</button>
       </div>
 
       <div class="panel-body">
@@ -154,6 +148,10 @@
         <h2>Pick & record</h2>
         <span id="poolInfo" class="pill">0 present</span>
         <div class="actions-row">
+          <label class="toggle">
+            <input type="checkbox" id="withReplacement">
+            <span>Allow repeats</span>
+          </label>
           <button id="undoButton" class="ghost">Go back</button>
           <button id="popOut" class="ghost">Pop out</button>
         </div>
@@ -229,6 +227,6 @@
 
   <button id="fullscreenBtn" class="ghost icon-btn" title="Fullscreen">⛶</button>
   <script src="https://accounts.google.com/gsi/client" async></script>
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
