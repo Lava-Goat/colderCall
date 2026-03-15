@@ -2,14 +2,11 @@ services:
   coldercall:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:16767:3000"
     volumes:
-      - coldercall_data:/app/data
+      - /home/jonerik/docker/coldercall/data:/app/data
     environment:
       PORT: 3000
       # Optional: needed only for Google Classroom import
       # GOOGLE_CLIENT_ID: your_client_id_here.apps.googleusercontent.com
     restart: unless-stopped
-
-volumes:
-  coldercall_data:

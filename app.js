@@ -94,6 +94,7 @@ function debounce(fn, ms) {
 }
 const historyStack = [];
 const HISTORY_LIMIT = 30;
+let tableSort = { col: null, dir: "asc" };
 const windowId = randomId();
 const isPopoutMode = new URLSearchParams(window.location.search).get("popout") === "1";
 let popoutWindow = null;
@@ -326,7 +327,7 @@ function parseCsv(text, opts = {}) {
     source === "classroom" ||
     firstRow.some((cell) => {
       const key = normalizeHeader(cell);
-      return ["firstname", "first", "lastname", "last", "fullname", "fullname", "name", "student", "email", "emailaddress"].includes(
+      return ["firstname", "first", "fname", "lastname", "last", "lname", "fullname", "name", "student", "studentname", "email", "emailaddress"].includes(
         key
       );
     });
@@ -337,11 +338,11 @@ function parseCsv(text, opts = {}) {
   if (headersPresent) {
     firstRow.forEach((cell, index) => {
       const key = normalizeHeader(cell);
-      if (["firstname", "first"].includes(key)) headerIndexes.first = index;
-      if (["lastname", "last"].includes(key)) headerIndexes.last = index;
-      if (["fullname", "name", "student"].includes(key)) headerIndexes.full = index;
-      if (["classname", "class", "course", "coursename"].includes(key)) headerIndexes.className = index;
-      if (["period", "section"].includes(key)) headerIndexes.period = index;
+      if (["firstname", "first", "fname"].includes(key)) headerIndexes.first = index;
+      if (["lastname", "last", "lname"].includes(key)) headerIndexes.last = index;
+      if (["fullname", "name", "student", "studentname"].includes(key)) headerIndexes.full = index;
+      if (["classname", "class", "course", "coursename", "coursetitle", "coursedescription", "description"].includes(key)) headerIndexes.className = index;
+      if (["period", "per", "pd", "section"].includes(key)) headerIndexes.period = index;
       if (source === "classroom" && key === "section") headerIndexes.period = index;
     });
     startIndex = 1;
@@ -445,11 +446,52 @@ function handleRosterUpload(event) {
 
 function showAeriesClassPicker(classes) {
   elements.aeriesClassList.innerHTML = "";
+  const checkboxes = [];
+
+  // Header controls row
+  const header = document.createElement("div");
+  header.className = "field-inline";
+  header.style.cssText = "margin-bottom:8px;align-items:center;flex-wrap:wrap;";
+
+  const selectAllBtn = document.createElement("button");
+  selectAllBtn.className = "ghost";
+  selectAllBtn.textContent = "Select all";
+  let allSelected = false;
+  selectAllBtn.addEventListener("click", () => {
+    allSelected = !allSelected;
+    checkboxes.forEach((cb) => { cb.checked = allSelected; });
+    selectAllBtn.textContent = allSelected ? "Deselect all" : "Select all";
+  });
+
+  const importSelBtn = document.createElement("button");
+  importSelBtn.className = "primary";
+  importSelBtn.textContent = "Import selected";
+  importSelBtn.addEventListener("click", () => {
+    const selected = classes.filter((_, i) => checkboxes[i].checked);
+    if (!selected.length) { alert("Select at least one class."); return; }
+    addStudents(selected.flatMap((cls) => cls.students));
+    elements.aeriesClassPicker.style.display = "none";
+    elements.aeriesClassList.innerHTML = "";
+  });
+
+  header.appendChild(selectAllBtn);
+  header.appendChild(importSelBtn);
+  elements.aeriesClassList.appendChild(header);
+
+  // One row per class
   classes.forEach((cls) => {
     const row = document.createElement("div");
     row.className = "aeries-class-row";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.style.cssText = "width:16px;height:16px;flex-shrink:0;cursor:pointer;";
+    checkboxes.push(cb);
+
     const label = document.createElement("span");
     label.textContent = `Per ${cls.period} — ${cls.className} (${cls.students.length} students)`;
+    label.style.flex = "1";
+
     const btn = document.createElement("button");
     btn.className = "ghost";
     btn.textContent = "Import";
@@ -458,10 +500,13 @@ function showAeriesClassPicker(classes) {
       elements.aeriesClassPicker.style.display = "none";
       elements.aeriesClassList.innerHTML = "";
     });
+
+    row.appendChild(cb);
     row.appendChild(label);
     row.appendChild(btn);
     elements.aeriesClassList.appendChild(row);
   });
+
   elements.aeriesClassPicker.style.display = "";
 }
 
@@ -700,9 +745,45 @@ function renderCurrentStudent() {
   elements.currentStatus.textContent = classBits ? `${statusText} · ${classBits}` : statusText;
 }
 
+const STATUS_ORDER = { correct: 0, incorrect: 1, pass: 2, absent: 3, pending: 4 };
+
+function getSortValue(student, col) {
+  switch (col) {
+    case "name": return formatName(student).toLowerCase();
+    case "class": return (student.className || "").toLowerCase();
+    case "period": {
+      const n = parseInt(student.period, 10);
+      return isNaN(n) ? (student.period || "").toLowerCase() : n;
+    }
+    case "status": return STATUS_ORDER[student.status] ?? 5;
+    case "calls": return student.calls || 0;
+    default: return "";
+  }
+}
+
+function renderTableHeaders() {
+  document.querySelectorAll("#classListPanel th[data-sort-col]").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sortCol === tableSort.col) {
+      th.classList.add(tableSort.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+}
+
 function renderStudents() {
+  let students = [...state.students];
+  if (tableSort.col) {
+    students.sort((a, b) => {
+      const av = getSortValue(a, tableSort.col);
+      const bv = getSortValue(b, tableSort.col);
+      const cmp = typeof av === "number" && typeof bv === "number"
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+      return tableSort.dir === "asc" ? cmp : -cmp;
+    });
+  }
   const fragment = document.createDocumentFragment();
-  state.students.forEach((student) => {
+  students.forEach((student) => {
     const tr = document.createElement("tr");
 
     const nameCell = document.createElement("td");
@@ -904,6 +985,60 @@ function renderGroups() {
   });
 }
 
+function renderGroupFromClassPicker() {
+  const row = document.getElementById("groupFromClassRow");
+  const sel = document.getElementById("groupFromClassSelect");
+  if (!row || !sel) return;
+
+  const classMap = new Map();
+  state.students.forEach((s) => {
+    const key = `${s.period}|||${s.className}`;
+    if (!classMap.has(key)) classMap.set(key, { period: s.period, className: s.className });
+  });
+
+  if (classMap.size < 1) {
+    row.style.display = "none";
+    return;
+  }
+
+  row.style.display = "";
+  sel.innerHTML = "";
+  classMap.forEach(({ period, className }, key) => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    const parts = [period && `Per ${period}`, className].filter(Boolean);
+    opt.textContent = parts.join(" · ") || "Unknown class";
+    sel.appendChild(opt);
+  });
+}
+
+function createGroupFromClass() {
+  const sel = document.getElementById("groupFromClassSelect");
+  if (!sel || !sel.value) return;
+  const key = sel.value;
+  const [period, className] = key.split("|||");
+  const nameParts = [className, period && `Per ${period}`].filter(Boolean);
+  const name = nameParts.join(" ") || "Class group";
+
+  if (state.groups.find((g) => g.name === name)) {
+    alert(`A group named "${name}" already exists.`);
+    return;
+  }
+
+  const studentIds = state.students
+    .filter((s) => `${s.period}|||${s.className}` === key)
+    .map((s) => s.id);
+
+  pushHistory();
+  state.groups.push({ id: randomId(), name, studentIds });
+  markDirty();
+  persistState();
+  renderGroups();
+  renderGroupFromClassPicker();
+  renderFilterPicker();
+  renderStudents();
+}
+
 function setServerStatus(message, tone = "muted") {
   if (!elements.serverStatus) return;
   const toneClass =
@@ -937,7 +1072,9 @@ function render() {
   renderPoolInfo();
   renderCurrentStudent();
   renderStudents();
+  renderTableHeaders();
   renderGroups();
+  renderGroupFromClassPicker();
   elements.displayMode.value = state.displayMode;
   elements.memo.value = state.memo;
   elements.carryMemo.checked = state.carryMemo;
@@ -1484,6 +1621,20 @@ function init() {
       if (e.key === "Enter") createGroup();
     });
   }
+  document.getElementById("groupFromClassBtn")?.addEventListener("click", createGroupFromClass);
+  document.querySelector("#classListPanel table thead")?.addEventListener("click", (event) => {
+    const th = event.target.closest("th[data-sort-col]");
+    if (!th) return;
+    const col = th.dataset.sortCol;
+    if (tableSort.col === col) {
+      tableSort.dir = tableSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      tableSort.col = col;
+      tableSort.dir = "asc";
+    }
+    renderTableHeaders();
+    renderStudents();
+  });
   elements.exportCsv.addEventListener("click", toCsv);
   elements.saveServer.addEventListener("click", saveToServer);
   elements.loadServer.addEventListener("click", loadFromServer);
