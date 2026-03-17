@@ -58,6 +58,16 @@ db.exec(`
     PRIMARY KEY (session_id, cycle_number),
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS call_log (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    student_id TEXT,
+    cycle_number INTEGER,
+    outcome TEXT,
+    called_at TEXT,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
 `);
 
 function ensureColumn(table, column, definition) {
@@ -112,9 +122,17 @@ const insertCycleMemo = db.prepare(
 const getCycleMemos = db.prepare(
   "SELECT cycle_number, memo, created_at FROM cycle_memos WHERE session_id = ? ORDER BY cycle_number ASC"
 );
+const deleteCallLogForSession = db.prepare("DELETE FROM call_log WHERE session_id = ?");
+const insertCallLogEntry = db.prepare(`
+  INSERT INTO call_log (id, session_id, student_id, cycle_number, outcome, called_at)
+  VALUES (@id, @session_id, @student_id, @cycle_number, @outcome, @called_at)
+`);
+const getCallLogForSession = db.prepare(
+  "SELECT id, student_id, cycle_number, outcome, called_at FROM call_log WHERE session_id = ? ORDER BY called_at ASC, rowid ASC"
+);
 
 const saveSession = db.transaction(
-  ({ sessionId, memo, displayMode, withReplacement, students, cycleNumber, memoHistory, carryMemo, defaults, groups }) => {
+  ({ sessionId, memo, displayMode, withReplacement, students, cycleNumber, memoHistory, carryMemo, defaults, groups, callLog }) => {
     const now = new Date().toISOString();
     const id = sessionId || makeId();
     insertSession.run({
@@ -156,6 +174,19 @@ const saveSession = db.transaction(
         cycle_number: cycleNum,
         memo: entry.memo || "",
         created_at: now,
+      });
+    });
+
+    deleteCallLogForSession.run(id);
+    (callLog || []).forEach((entry) => {
+      if (!entry || !entry.id || !entry.studentId) return;
+      insertCallLogEntry.run({
+        id: entry.id,
+        session_id: id,
+        student_id: entry.studentId,
+        cycle_number: Number.isFinite(entry.cycleNumber) ? entry.cycleNumber : 1,
+        outcome: entry.outcome || null,
+        called_at: entry.calledAt || now,
       });
     });
 
@@ -366,6 +397,7 @@ app.post("/api/session", (req, res) => {
     carryMemo = false,
     defaults = { className: "", period: "" },
     groups = [],
+    callLog = [],
   } = req.body || {};
 
   if (!Array.isArray(students)) {
@@ -384,6 +416,7 @@ app.post("/api/session", (req, res) => {
       carryMemo,
       defaults,
       groups,
+      callLog,
     });
     res.json({ sessionId: id });
   } catch (error) {
@@ -399,6 +432,7 @@ app.get("/api/session/:id", (req, res) => {
   }
   const students = getStudentsForSession.all(req.params.id);
   const memos = getCycleMemos.all(req.params.id);
+  const callLogRows = getCallLogForSession.all(req.params.id);
   res.json({
     sessionId: session.id,
     memo: session.memo,
@@ -419,6 +453,13 @@ app.get("/api/session/:id", (req, res) => {
     createdAt: session.created_at,
     updatedAt: session.updated_at,
     students,
+    callLog: callLogRows.map((r) => ({
+      id: r.id,
+      studentId: r.student_id,
+      cycleNumber: r.cycle_number,
+      outcome: r.outcome,
+      calledAt: r.called_at,
+    })),
   });
 });
 
@@ -454,10 +495,11 @@ app.post("/api/db/import", dbImport.single("file"), (req, res) => {
     fs.writeFileSync(tmpPath, req.file.buffer);
     const srcDb = new Database(tmpPath, { readonly: true });
 
-    let srcSessions = [], srcStudents = [], srcMemos = [];
+    let srcSessions = [], srcStudents = [], srcMemos = [], srcCallLog = [];
     try { srcSessions = srcDb.prepare("SELECT * FROM sessions").all(); } catch (_) {}
     try { srcStudents = srcDb.prepare("SELECT * FROM students").all(); } catch (_) {}
     try { srcMemos = srcDb.prepare("SELECT * FROM cycle_memos").all(); } catch (_) {}
+    try { srcCallLog = srcDb.prepare("SELECT * FROM call_log").all(); } catch (_) {}
     srcDb.close();
 
     const importSession = db.prepare(`
@@ -480,9 +522,13 @@ app.post("/api/db/import", dbImport.single("file"), (req, res) => {
       INSERT OR REPLACE INTO cycle_memos (session_id, cycle_number, memo, created_at)
       VALUES (@session_id, @cycle_number, @memo, @created_at)
     `);
+    const importCallLogEntry = db.prepare(`
+      INSERT OR REPLACE INTO call_log (id, session_id, student_id, cycle_number, outcome, called_at)
+      VALUES (@id, @session_id, @student_id, @cycle_number, @outcome, @called_at)
+    `);
 
     db.transaction(() => {
-      db.exec("DELETE FROM cycle_memos; DELETE FROM students; DELETE FROM sessions;");
+      db.exec("DELETE FROM call_log; DELETE FROM cycle_memos; DELETE FROM students; DELETE FROM sessions;");
       srcSessions.forEach((s) => importSession.run({
         groups: "[]", carry_memo: 0, default_class_name: "", default_period: "",
         created_at: null, updated_at: null, ...s,
@@ -491,6 +537,9 @@ app.post("/api/db/import", dbImport.single("file"), (req, res) => {
         class_name: "", period: "", called_this_cycle: 0, ...s,
       }));
       srcMemos.forEach((m) => importMemo.run(m));
+      srcCallLog.forEach((e) => importCallLogEntry.run({
+        outcome: null, called_at: null, ...e,
+      }));
     })();
 
     res.json({ ok: true, sessions: srcSessions.length });

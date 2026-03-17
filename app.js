@@ -64,6 +64,7 @@ const state = {
   },
   groups: [],
   activeFilter: { type: "all" },
+  callLog: [],
 };
 
 let unsavedChanges = false;
@@ -1156,6 +1157,13 @@ function pickStudent() {
   student.calledThisCycle = true;
   student.calls = (student.calls || 0) + 1;
   state.currentId = nextId;
+  state.callLog.push({
+    id: randomId(),
+    studentId: nextId,
+    cycleNumber: state.cycleNumber,
+    outcome: null,
+    calledAt: new Date().toISOString(),
+  });
   markDirty();
   persistState();
   renderCurrentStudent();
@@ -1173,6 +1181,13 @@ function setOutcome(outcome) {
     student.status = "pending";
   } else {
     student.status = outcome;
+    // Update the most recent pending log entry for this student
+    for (let i = state.callLog.length - 1; i >= 0; i--) {
+      if (state.callLog[i].studentId === state.currentId && state.callLog[i].outcome === null) {
+        state.callLog[i].outcome = outcome;
+        break;
+      }
+    }
   }
   markDirty();
   persistState();
@@ -1209,6 +1224,7 @@ function clearRoster() {
   state.memoHistory = [];
   state.cycleNumber = 1;
   state.memo = "";
+  state.callLog = [];
   markDirty();
   persistState();
   render();
@@ -1407,21 +1423,37 @@ function toCsv() {
       "period",
       "status",
       "calls",
+      "correct",
+      "incorrect",
+      "pass",
+      "pct_correct",
       "memo",
       "cycle_number",
     ],
-    ...state.students.map((s) => [
-      s.id,
-      s.fullName,
-      s.firstName,
-      s.lastName,
-      s.className || "",
-      s.period || "",
-      s.status,
-      s.calls || 0,
-      state.memo || "",
-      state.cycleNumber,
-    ]),
+    ...state.students.map((s) => {
+      const log = state.callLog.filter((e) => e.studentId === s.id && e.outcome !== null);
+      const correct = log.filter((e) => e.outcome === "correct").length;
+      const incorrect = log.filter((e) => e.outcome === "incorrect").length;
+      const pass = log.filter((e) => e.outcome === "pass").length;
+      const answered = correct + incorrect;
+      const pctCorrect = answered > 0 ? ((correct / answered) * 100).toFixed(1) : "";
+      return [
+        s.id,
+        s.fullName,
+        s.firstName,
+        s.lastName,
+        s.className || "",
+        s.period || "",
+        s.status,
+        s.calls || 0,
+        correct,
+        incorrect,
+        pass,
+        pctCorrect,
+        state.memo || "",
+        state.cycleNumber,
+      ];
+    }),
   ];
   const csv = rows
     .map((row) =>
@@ -1492,6 +1524,7 @@ async function loadFromServer() {
     state.memoHistory = data.memoHistory || [];
     state.defaults = data.defaults || { className: "", period: "" };
     state.groups = Array.isArray(data.groups) ? data.groups : [];
+    state.callLog = Array.isArray(data.callLog) ? data.callLog : [];
     state.activeFilter = { type: "all" };
     state.sessionId = data.sessionId;
     unsavedChanges = false;
@@ -1525,6 +1558,7 @@ async function saveToServer() {
         carryMemo: state.carryMemo,
         defaults: state.defaults,
         groups: state.groups,
+        callLog: state.callLog,
       }),
     });
     if (!response.ok) {
