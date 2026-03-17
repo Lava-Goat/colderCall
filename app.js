@@ -33,6 +33,9 @@ const elements = {
   statusButtons: document.getElementById("statusButtons"),
   studentTable: document.getElementById("studentTable"),
   exportCsv: document.getElementById("exportCsv"),
+  exportDb: document.getElementById("exportDb"),
+  importDb: document.getElementById("importDb"),
+  importDbFile: document.getElementById("importDbFile"),
   saveServer: document.getElementById("saveServer"),
   loadServer: document.getElementById("loadServer"),
   serverStatus: document.getElementById("serverStatus"),
@@ -1543,6 +1546,55 @@ async function saveToServer() {
   }
 }
 
+async function exportDatabase() {
+  elements.exportDb.disabled = true;
+  try {
+    const response = await fetch("/api/db/export");
+    if (!response.ok) throw new Error(await response.text());
+    const blob = await response.blob();
+    downloadFile("colderCall.sqlite", blob, "application/x-sqlite3");
+  } catch (err) {
+    console.error("DB export failed", err);
+    alert("Export failed: " + err.message);
+  } finally {
+    elements.exportDb.disabled = false;
+  }
+}
+
+async function importDatabase(file) {
+  if (!file) return;
+  const confirmed = confirm(
+    "Loading a database file will replace ALL current data. This cannot be undone.\n\nContinue?"
+  );
+  if (!confirmed) return;
+
+  const form = new FormData();
+  form.append("file", file);
+
+  elements.importDb.disabled = true;
+  setServerStatus("Importing database…", "warn");
+  try {
+    const response = await fetch("/api/db/import", { method: "POST", body: form });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(err.error || response.statusText);
+    }
+    const { sessions } = await response.json();
+    // Clear local state so the user starts fresh with the imported DB
+    localStorage.removeItem(storageKey);
+    setServerStatus(`Database imported (${sessions} session${sessions !== 1 ? "s" : ""})`, "success");
+    location.reload();
+  } catch (err) {
+    console.error("DB import failed", err);
+    setServerStatus("Import failed", "danger");
+    alert("Import failed: " + err.message);
+  } finally {
+    elements.importDb.disabled = false;
+    // Reset file input so the same file can be re-selected
+    elements.importDbFile.value = "";
+  }
+}
+
 function downloadFile(filename, data, mime) {
   const blob = data instanceof Blob ? data : new Blob([data], { type: mime || "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -1697,6 +1749,9 @@ function init() {
     renderStudents();
   });
   elements.exportCsv.addEventListener("click", toCsv);
+  elements.exportDb.addEventListener("click", exportDatabase);
+  elements.importDb.addEventListener("click", () => elements.importDbFile.click());
+  elements.importDbFile.addEventListener("change", (e) => importDatabase(e.target.files[0]));
   elements.saveServer.addEventListener("click", saveToServer);
   elements.loadServer.addEventListener("click", loadFromServer);
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);

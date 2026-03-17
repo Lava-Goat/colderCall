@@ -423,6 +423,85 @@ app.get("/api/session/:id", (req, res) => {
 });
 
 
+// ── Database export / import ──────────────────────────────────────────────────
+
+app.get("/api/db/export", (_req, res) => {
+  try {
+    db.pragma("wal_checkpoint(FULL)");
+    res.download(DB_PATH, "colderCall.sqlite");
+  } catch (err) {
+    console.error("DB export failed", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const dbImport = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
+app.post("/api/db/import", dbImport.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+
+  // Validate SQLite magic bytes
+  const SQLITE_MAGIC = Buffer.from("SQLite format 3\x00");
+  if (req.file.buffer.length < 16 || !req.file.buffer.slice(0, 16).equals(SQLITE_MAGIC)) {
+    return res.status(422).json({ error: "File is not a valid SQLite database." });
+  }
+
+  const tmpPath = DB_PATH + ".import.tmp";
+  try {
+    fs.writeFileSync(tmpPath, req.file.buffer);
+    const srcDb = new Database(tmpPath, { readonly: true });
+
+    let srcSessions = [], srcStudents = [], srcMemos = [];
+    try { srcSessions = srcDb.prepare("SELECT * FROM sessions").all(); } catch (_) {}
+    try { srcStudents = srcDb.prepare("SELECT * FROM students").all(); } catch (_) {}
+    try { srcMemos = srcDb.prepare("SELECT * FROM cycle_memos").all(); } catch (_) {}
+    srcDb.close();
+
+    const importSession = db.prepare(`
+      INSERT OR REPLACE INTO sessions
+        (id, memo, display_mode, with_replacement, cycle_number, carry_memo,
+         default_class_name, default_period, groups, created_at, updated_at)
+      VALUES
+        (@id, @memo, @display_mode, @with_replacement, @cycle_number, @carry_memo,
+         @default_class_name, @default_period, @groups, @created_at, @updated_at)
+    `);
+    const importStudent = db.prepare(`
+      INSERT OR REPLACE INTO students
+        (id, session_id, full_name, first_name, last_name, class_name,
+         period, status, calls, called_this_cycle)
+      VALUES
+        (@id, @session_id, @full_name, @first_name, @last_name, @class_name,
+         @period, @status, @calls, @called_this_cycle)
+    `);
+    const importMemo = db.prepare(`
+      INSERT OR REPLACE INTO cycle_memos (session_id, cycle_number, memo, created_at)
+      VALUES (@session_id, @cycle_number, @memo, @created_at)
+    `);
+
+    db.transaction(() => {
+      db.exec("DELETE FROM cycle_memos; DELETE FROM students; DELETE FROM sessions;");
+      srcSessions.forEach((s) => importSession.run({
+        groups: "[]", carry_memo: 0, default_class_name: "", default_period: "",
+        created_at: null, updated_at: null, ...s,
+      }));
+      srcStudents.forEach((s) => importStudent.run({
+        class_name: "", period: "", called_this_cycle: 0, ...s,
+      }));
+      srcMemos.forEach((m) => importMemo.run(m));
+    })();
+
+    res.json({ ok: true, sessions: srcSessions.length });
+  } catch (err) {
+    console.error("DB import failed", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
+});
+
 const serverReady = new Promise((resolve) => {
   app.listen(PORT, () => {
     console.log(`colderCall server running at http://localhost:${PORT}`);
