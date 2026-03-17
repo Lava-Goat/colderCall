@@ -1,6 +1,6 @@
 {
   "name": "coldercall",
-  "version": "1.0.0b2",
+  "version": "1.0.0rc",
   "private": true,
   "description": "colderCall - browser app with server-side SQLite storage",
   "author": "Jon-Erik G. Storm, Inc.",
