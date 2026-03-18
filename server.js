@@ -542,7 +542,10 @@ app.post("/api/db/import", dbImport.single("file"), (req, res) => {
       }));
     })();
 
-    res.json({ ok: true, sessions: srcSessions.length });
+    const latest = db.prepare(
+      "SELECT id FROM sessions ORDER BY updated_at DESC, created_at DESC LIMIT 1"
+    ).get();
+    res.json({ ok: true, sessions: srcSessions.length, latestSessionId: latest ? latest.id : null });
   } catch (err) {
     console.error("DB import failed", err);
     res.status(500).json({ error: err.message });

@@ -1613,10 +1613,43 @@ async function importDatabase(file) {
       const err = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error(err.error || response.statusText);
     }
-    const { sessions } = await response.json();
-    // Clear local state so the user starts fresh with the imported DB
+    const { sessions, latestSessionId } = await response.json();
     localStorage.removeItem(storageKey);
     setServerStatus(`Database imported (${sessions} session${sessions !== 1 ? "s" : ""})`, "success");
+    if (latestSessionId) {
+      const r = await fetch(`/api/session/${encodeURIComponent(latestSessionId)}`);
+      if (r.ok) {
+        const data = await r.json();
+        pushHistory();
+        state.students = (data.students || []).map((s) => ({
+          id: s.id,
+          firstName: s.first_name || "",
+          lastName: s.last_name || "",
+          fullName: s.full_name || "",
+          className: s.class_name || "",
+          period: s.period || "",
+          status: s.status || "pending",
+          calls: s.calls || 0,
+          calledThisCycle: Boolean(s.called_this_cycle),
+        }));
+        state.currentId = null;
+        state.memo = data.memo || "";
+        state.displayMode = data.displayMode || "full";
+        state.withReplacement = Boolean(data.withReplacement);
+        state.cycleNumber = data.cycleNumber || 1;
+        state.carryMemo = Boolean(data.carryMemo);
+        state.defaults = data.defaults || { className: "", period: "" };
+        state.groups = Array.isArray(data.groups) ? data.groups : [];
+        state.callLog = Array.isArray(data.callLog) ? data.callLog : [];
+        state.activeFilter = { type: "all" };
+        state.sessionId = data.sessionId;
+        unsavedChanges = false;
+        persistState();
+        render();
+        setServerStatus(`Database imported · ${latestSessionId}`, "success");
+        return;
+      }
+    }
     location.reload();
   } catch (err) {
     console.error("DB import failed", err);
