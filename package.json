@@ -33,7 +33,7 @@
   "build": {
     "appId": "com.coldercall.app",
     "productName": "colderCall",
-    "copyright": "Copyright © 2025 Jon-Erik G. Storm, Inc.",
+    "copyright": "Copyright © 2026 Jon-Erik G. Storm, Inc.",
     "files": [
       "electron.js",
       "server.js",
