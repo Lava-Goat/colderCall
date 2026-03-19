@@ -307,20 +307,28 @@ textarea {
 .callout {
   background: #f2f6ff;
   border: 1px solid #dbe6ff;
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 16px;
+  padding: 28px 24px 20px;
   margin-bottom: 14px;
+  text-align: center;
+}
+
+.callout .actions-row {
+  justify-content: center;
 }
 
 .big-name {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 4px 0;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 8px 0 6px;
+  word-break: break-word;
 }
 
 .status {
   color: var(--muted);
-  margin: 4px 0 12px;
+  margin: 0 0 16px;
 }
 
 .status-grid {
