@@ -29,6 +29,20 @@ function buildMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
+        {
+          label: 'Preferences…',
+          accelerator: 'Command+,',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.show();
+              mainWindow.focus();
+              mainWindow.webContents.executeJavaScript(
+                'document.getElementById("classroomField")?.scrollIntoView({behavior:"smooth",block:"center"})'
+              );
+            }
+          },
+        },
+        { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
         { role: 'hide' },

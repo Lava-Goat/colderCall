@@ -12,6 +12,11 @@ const elements = {
   periodInput: document.getElementById("periodInput"),
   defaultClassName: document.getElementById("defaultClassName"),
   defaultPeriod: document.getElementById("defaultPeriod"),
+  classroomConfig: document.getElementById("classroomConfig"),
+  classroomReady: document.getElementById("classroomReady"),
+  clientIdInput: document.getElementById("clientIdInput"),
+  saveClientId: document.getElementById("saveClientId"),
+  classroomChangeId: document.getElementById("classroomChangeId"),
   classroomSignIn: document.getElementById("classroomSignIn"),
   classroomSignOut: document.getElementById("classroomSignOut"),
   classroomPickerRow: document.getElementById("classroomPickerRow"),
@@ -555,6 +560,34 @@ async function loadConfig() {
     const data = await res.json();
     googleClientId = data.googleClientId || "";
   } catch (_) {}
+  updateClassroomConfigUI();
+}
+
+function updateClassroomConfigUI() {
+  const configured = Boolean(googleClientId);
+  elements.classroomConfig.style.display = configured ? "none" : "";
+  elements.classroomReady.style.display = configured ? "" : "none";
+}
+
+async function saveGoogleClientId() {
+  const id = (elements.clientIdInput.value || "").trim();
+  if (!id) { alert("Please enter a Client ID."); return; }
+  elements.saveClientId.disabled = true;
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ googleClientId: id }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to save");
+    googleClientId = id;
+    elements.clientIdInput.value = "";
+    updateClassroomConfigUI();
+  } catch (err) {
+    alert("Could not save Client ID: " + err.message);
+  } finally {
+    elements.saveClientId.disabled = false;
+  }
 }
 
 async function classroomGet(endpoint, params = {}) {
@@ -569,10 +602,6 @@ async function classroomGet(endpoint, params = {}) {
 }
 
 function classroomSignIn() {
-  if (!googleClientId) {
-    alert("No Google Client ID configured. Add GOOGLE_CLIENT_ID to your .env file.");
-    return;
-  }
   const client = google.accounts.oauth2.initTokenClient({
     client_id: googleClientId,
     scope: "https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.courses.readonly",
@@ -1798,6 +1827,13 @@ function init() {
     state.defaults.period = elements.defaultPeriod.value.trim();
     markDirty();
     debouncedPersist();
+  });
+  elements.saveClientId.addEventListener("click", saveGoogleClientId);
+  elements.clientIdInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveGoogleClientId(); });
+  elements.classroomChangeId.addEventListener("click", () => {
+    googleClientId = "";
+    classroomSignOut();
+    updateClassroomConfigUI();
   });
   elements.classroomSignIn.addEventListener("click", classroomSignIn);
   elements.classroomSignOut.addEventListener("click", classroomSignOut);

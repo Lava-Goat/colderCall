@@ -64,22 +64,43 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field" id="classroomField">
         <label>Google Classroom</label>
-        <div class="actions-row">
-          <button id="classroomSignIn" class="ghost">Sign in with Google</button>
-          <button id="classroomSignOut" class="ghost" style="display:none">Sign out</button>
-        </div>
-        <div class="field-inline" id="classroomPickerRow" style="display:none">
-          <div class="field" style="flex:1">
-            <label for="classroomCoursePicker" class="sr-only">Course</label>
-            <select id="classroomCoursePicker">
-              <option value="">— select a course —</option>
-            </select>
+
+        <!-- Shown when no Client ID is saved -->
+        <div id="classroomConfig">
+          <p class="helper" style="margin-bottom:6px">
+            A Google OAuth Client ID is required to import from Classroom.
+          </p>
+          <div class="field-inline">
+            <input type="text" id="clientIdInput" placeholder="xxxx.apps.googleusercontent.com" style="flex:1">
+            <button id="saveClientId" class="ghost">Save</button>
           </div>
-          <button id="classroomApiImport" class="ghost" disabled>Import roster</button>
+          <p class="helper">
+            <a id="cloudConsoleLink" href="https://console.cloud.google.com" target="_blank" rel="noopener">Get a Client ID →</a>
+            Create an OAuth 2.0 Client ID (Web application type) and add
+            <code>http://localhost</code> as an authorised JavaScript origin.
+          </p>
         </div>
-        <p class="helper" id="classroomStatus"></p>
+
+        <!-- Shown when a Client ID is configured -->
+        <div id="classroomReady" style="display:none">
+          <div class="actions-row">
+            <button id="classroomSignIn" class="ghost">Sign in with Google</button>
+            <button id="classroomSignOut" class="ghost" style="display:none">Sign out</button>
+            <button id="classroomChangeId" class="ghost" style="margin-left:auto;font-size:0.8em;opacity:0.7">Change Client ID</button>
+          </div>
+          <div class="field-inline" id="classroomPickerRow" style="display:none">
+            <div class="field" style="flex:1">
+              <label for="classroomCoursePicker" class="sr-only">Course</label>
+              <select id="classroomCoursePicker">
+                <option value="">— select a course —</option>
+              </select>
+            </div>
+            <button id="classroomApiImport" class="ghost" disabled>Import roster</button>
+          </div>
+          <p class="helper" id="classroomStatus"></p>
+        </div>
       </div>
 
       <!-- Issue #11: collapsible add-student section -->

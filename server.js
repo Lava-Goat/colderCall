@@ -11,8 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const DB_PATH = path.join(DATA_DIR, "colderCall.sqlite");
+const CONFIG_PATH = path.join(DATA_DIR, "config.json");
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// Persistent config (survives restarts, writable at runtime via POST /api/config).
+// Env vars take precedence so server deployments can still use .env without touching the UI.
+let appConfig = {};
+try { appConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); } catch (_) {}
 
 const makeId = () =>
   typeof randomUUID === "function"
@@ -367,7 +373,21 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/config", (_req, res) => {
-  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || appConfig.googleClientId || "",
+  });
+});
+
+app.post("/api/config", (req, res) => {
+  const { googleClientId } = req.body || {};
+  appConfig.googleClientId = (googleClientId || "").trim();
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(appConfig, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Failed to save config", err);
+    res.status(500).json({ error: "Failed to save configuration." });
+  }
 });
 
 app.post("/api/parse/aeries", aeriesUpload.single("file"), (req, res) => {
