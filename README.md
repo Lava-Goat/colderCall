@@ -18,14 +18,16 @@ Built to stay out of your way during class. No accounts, no subscriptions, no cl
 |---|---|
 | **Random selection** | With or without replacement; automatic cycle reset when every student has been called |
 | **Outcome tracking** | Correct · Incorrect · Pass · Absent per student, per cycle |
+| **Call log** | Every pick is timestamped and recorded with its outcome; exported in the CSV |
 | **Name display modes** | Full name · First only · Last only · First + last initial |
 | **Per-cycle memos** | Freeform note for each cycle; optional carryover; full memo history saved |
-| **Undo** | Go back one step at any point |
+| **Undo** | Reverses picks, status changes, and call log entries — up to 30 steps |
+| **Skip** | Pass on the current student; a different student is always picked next |
 | **Pop-out window** | Detach the Pick & Record panel into a floating window — keep the roster on one screen, the picker on another |
 | **Fullscreen mode** | Distraction-free display of the current student's name for classroom projection |
-| **Collapsible panels** | Collapse the roster or picker panel independently to reclaim screen space |
+| **Collapsible panels** | Collapse the roster or class list independently to reclaim screen space |
 | **Sortable roster** | Click any column header to sort by name, class, period, status, or call count |
-| **Edit student names** | Click the pencil icon on any roster row to rename a student in place |
+| **Edit student names** | Click **Edit** on any roster row to rename a student in place |
 | **Class & group filtering** | Filter the pick pool to a specific class/period combination or a custom group |
 | **Custom groups** | Create named groups of students (e.g. "Reading Support") and include or exclude them from picks |
 | **Group from class** | One-click: convert an existing class/period into a named group |
@@ -33,9 +35,9 @@ Built to stay out of your way during class. No accounts, no subscriptions, no cl
 | **Keyboard shortcut** | Space or Enter picks the next student when no input is focused |
 | **Dark mode** | Manual toggle (☀️/🌙) that overrides the system preference, persisted across sessions |
 | **Roster import** | CSV upload, Aeries XLSX export (single or multi-class), manual entry, or Google Classroom (OAuth) |
-| **Aeries multi-class import** | Import an Aeries XLSX with multiple classes; pick which classes to load via a checkbox picker |
-| **Export** | Download the full roster + outcomes as CSV at any time |
-| **Server persistence** | SQLite via `better-sqlite3`; save/load sessions by ID so data survives restarts |
+| **CSV export** | Download the full roster + outcomes + per-student correct/incorrect/pass counts at any time |
+| **Database export/import** | Save and restore the full SQLite database as a single file — useful for backups and migrating between devices |
+| **Server persistence** | SQLite via `better-sqlite3`; save/load named sessions so data survives restarts |
 
 ---
 
@@ -51,8 +53,8 @@ The recommended way to run colderCall. Runs as a native app on macOS, Windows, a
 ### Install and run
 
 ```bash
-git clone https://castle.great-morpho.ts.net:3000/jonerik/colderCallX.git
-cd colderCallX
+git clone https://castle.great-morpho.ts.net:3000/jonerik/colderCall.git
+cd colderCall
 npm install
 npm run electron
 ```
@@ -99,8 +101,8 @@ Run colderCall as a local web server and open it in any browser — useful for s
 ### Install and run
 
 ```bash
-git clone https://castle.great-morpho.ts.net:3000/jonerik/colderCallX.git
-cd colderCallX
+git clone https://castle.great-morpho.ts.net:3000/jonerik/colderCall.git
+cd colderCall
 npm install
 npm start
 ```
@@ -140,7 +142,7 @@ The compose file binds to `127.0.0.1:16767` and mounts data at `/home/jonerik/do
 
 ### Loading a roster
 
-**Aeries XLSX** — click *Import Aeries XLSX* and upload a standard Aeries class roster export. Multi-class files are supported: a picker lets you select which classes to import.
+**Aeries XLSX** — click *Import Aeries XLSX* and upload a standard Aeries class roster export. Multi-class files are supported: a picker lets you select which classes to import via checkboxes.
 
 **CSV upload** — click *Upload roster (CSV)*. Headers are optional; the parser recognises `first`, `last`, `fullname`, `name`, `class`, `period`, and similar variants. Without headers, columns are interpreted as first, last, class, period.
 
@@ -161,7 +163,7 @@ The pool info bar shows how many students are in the active pool and which filte
 
 ### Custom groups
 
-Type a group name and click **Create group**, then check the students you want to include. Groups are saved with the session. You can also create a group from an existing class using the **Group from class** button next to any class filter.
+Type a group name and click **Create group**, then add students to it from the roster. Groups are saved with the session. You can also create a group from one or more existing classes using the **Group from class** section.
 
 ### Picking students
 
@@ -170,9 +172,9 @@ Click **Pick next student** (or press **Space / Enter**) to draw at random from 
 - **No repeats this cycle** (default) — each student is called once before anyone is called again. The pool resets automatically at the end of each cycle.
 - **Allow repeats** — draws from the full active pool every time.
 
-Use **Skip** to pass on the current student without recording an outcome.
+Click **Skip** to pass on the current student without recording an outcome. The next pick will always be a different student.
 
-Use **Undo** to reverse the last pick or status change (up to 30 steps).
+Click **Undo** to reverse the last pick or status change, including its call log entry. Up to 30 steps are available.
 
 ### Recording outcomes
 
@@ -192,17 +194,21 @@ Click **Pop out** in the picker panel header to open it in a separate window. Bo
 
 ### Fullscreen mode
 
-Click **Fullscreen** in the picker panel to display the current student's name in a large, distraction-free view. Press **Escape** or click **Exit fullscreen** to return.
+Click **⛶** in the picker panel to display the current student's name in a large, distraction-free view suitable for classroom projection. Press **Escape** or click **✕** to return.
 
 ### Memos
 
-The memo field is per-cycle. When you click **Reset cycle**, the current memo is archived to cycle history and a new one starts (or carries over if *Keep memo* is checked). Cycle history is saved with the session.
+The memo field is per-cycle. When you click **Reset cycle**, the current memo is archived to cycle history and a new one starts (or carries over if *Keep memo* is checked). The full memo history is saved with the session and included in server saves.
 
 ### Saving and loading
 
-Click **Save to server** to persist the current session to SQLite. A session ID is shown in the status pill — copy it to restore the session later.
+**Session save/load** — click **Save to server** to persist the current session to SQLite. A session ID is shown in the status pill — note it to restore the session later. Click **Load session** and enter the session ID to restore a previously saved session.
 
-Click **Load session** and enter the session ID to restore a previously saved session.
+**Database export/import** — click **Save database** to download the full SQLite file as a backup. Click **Load database** to upload a previously exported file and restore all sessions from it. The import merges all sessions from the file into the live database.
+
+### Exporting results
+
+Click **Export CSV** to download a spreadsheet containing each student's name, class, period, status, total call count, and per-outcome counts (correct, incorrect, pass) with a percentage-correct column.
 
 ---
 
@@ -219,9 +225,9 @@ Click **Load session** and enter the session ID to restore a previously saved se
 ## Project structure
 
 ```
-colderCallX/
+colderCall/
 ├── electron.js      Electron main process (embeds Express, manages windows)
-├── server.js        Express server, SQLite persistence, Aeries parser
+├── server.js        Express server, SQLite persistence, Aeries XLSX parser
 ├── app.js           All client-side logic (state, rendering, sync, OAuth)
 ├── index.html       Single-page UI
 ├── styles.css       CSS custom properties, light + dark themes
@@ -240,13 +246,16 @@ The front end is vanilla JS with no build step. The server is a small Express ap
 
 ## Data storage
 
-Sessions are stored in `colderCall.sqlite` with three tables:
+Sessions are stored in `colderCall.sqlite` with four tables:
 
-- **`sessions`** — settings, memo, cycle number, defaults, groups
-- **`students`** — roster with outcomes and call counts per session
-- **`cycle_memos`** — memo archive per cycle per session
+| Table | Contents |
+|---|---|
+| `sessions` | Settings, memo, cycle number, defaults, and groups per session |
+| `students` | Roster with outcomes and call counts per session |
+| `cycle_memos` | Archived memo for each completed cycle |
+| `call_log` | Timestamped record of every pick, with outcome, cycle number, and student ID |
 
-The database file is excluded from static file serving and from version control.
+The database runs in WAL mode for safe concurrent access. The database file is excluded from static file serving and from version control.
 
 ---
 

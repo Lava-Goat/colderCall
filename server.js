@@ -70,6 +70,8 @@ db.exec(`
   );
 `);
 
+// IMPORTANT: table, column, and definition must be hardcoded compile-time
+// constants — never pass user-supplied input to this function (SQL injection).
 function ensureColumn(table, column, definition) {
   const exists = db
     .prepare(`PRAGMA table_info(${table})`)
@@ -501,6 +503,10 @@ app.post("/api/db/import", dbImport.single("file"), (req, res) => {
     try { srcMemos = srcDb.prepare("SELECT * FROM cycle_memos").all(); } catch (_) {}
     try { srcCallLog = srcDb.prepare("SELECT * FROM call_log").all(); } catch (_) {}
     srcDb.close();
+
+    if (!srcSessions.length) {
+      return res.status(422).json({ error: "Imported database contains no sessions. Import aborted to protect existing data." });
+    }
 
     const importSession = db.prepare(`
       INSERT OR REPLACE INTO sessions

@@ -134,6 +134,7 @@ function snapshotState() {
       defaults: state.defaults,
       groups: state.groups,
       activeFilter: state.activeFilter,
+      callLog: state.callLog,
     })
   );
 }
@@ -786,6 +787,16 @@ function renderStudents() {
       return tableSort.dir === "asc" ? cmp : -cmp;
     });
   }
+
+  // Pre-build group membership map to avoid O(n²) includes() inside the loop.
+  const studentGroups = new Map();
+  for (const group of state.groups) {
+    for (const sid of group.studentIds) {
+      if (!studentGroups.has(sid)) studentGroups.set(sid, []);
+      studentGroups.get(sid).push(group);
+    }
+  }
+
   const fragment = document.createDocumentFragment();
   students.forEach((student) => {
     const tr = document.createElement("tr");
@@ -817,7 +828,8 @@ function renderStudents() {
 
     // Groups column
     const groupsCell = document.createElement("td");
-    const memberOf = state.groups.filter((g) => g.studentIds.includes(student.id));
+    const memberOf = studentGroups.get(student.id) || [];
+    const memberIds = new Set(memberOf.map((g) => g.id));
     memberOf.forEach((g) => {
       const pill = document.createElement("span");
       pill.className = "pill";
@@ -834,7 +846,7 @@ function renderStudents() {
       pill.appendChild(xBtn);
       groupsCell.appendChild(pill);
     });
-    const notMember = state.groups.filter((g) => !g.studentIds.includes(student.id));
+    const notMember = state.groups.filter((g) => !memberIds.has(g.id));
     if (notMember.length > 0) {
       const addSel = document.createElement("select");
       addSel.style.cssText = "font-size:12px;padding:2px 4px;border-radius:6px;max-width:120px;";
@@ -1126,22 +1138,25 @@ function applyRemoteState(payload) {
   if (!payload) return;
   applyingRemote = true;
   Object.assign(state, payload);
-  unsavedChanges = true;
   persistState();
   applyingRemote = false;
   render();
 }
 
-function pickStudent() {
+function pickStudent(excludeId = null) {
   const available = getActivePool();
   if (!available.length) {
     alert("No present students in the active pool.");
     return;
   }
 
+  const filteredAvailable = excludeId && available.length > 1
+    ? available.filter((s) => s.id !== excludeId)
+    : available;
+
   let pool = state.withReplacement
-    ? available
-    : available.filter((s) => !s.calledThisCycle);
+    ? filteredAvailable
+    : filteredAvailable.filter((s) => !s.calledThisCycle);
 
   pushHistory();
   if (!pool.length && !state.withReplacement) {
@@ -1150,7 +1165,8 @@ function pickStudent() {
     state.students.forEach((s) => {
       if (poolIds.has(s.id)) s.calledThisCycle = false;
     });
-    pool = state.students.filter((s) => poolIds.has(s.id) && s.status !== "absent");
+    pool = filteredAvailable.filter((s) => s.status !== "absent");
+    if (!pool.length) pool = available.filter((s) => s.status !== "absent");
   }
   const nextId = pool[Math.floor(Math.random() * pool.length)].id;
   const student = state.students.find((s) => s.id === nextId);
@@ -1197,6 +1213,7 @@ function setOutcome(outcome) {
 }
 
 function resetCycle() {
+  pushHistory();
   const previousMemo = state.memo;
   state.memoHistory = state.memoHistory.concat({
     cycle: state.cycleNumber,
@@ -1204,7 +1221,6 @@ function resetCycle() {
   });
   state.cycleNumber = (state.cycleNumber || 1) + 1;
   state.memo = state.carryMemo ? previousMemo : "";
-  pushHistory();
   state.students = state.students.map((student) => ({
     ...student,
     calledThisCycle: false,
@@ -1362,6 +1378,7 @@ function handleTableClick(event) {
     if (newFirst === null) return;
     pushHistory();
     student.firstName = newFirst.trim();
+    student.fullName = `${student.firstName} ${student.lastName}`.trim();
     markDirty();
   }
   if (action === "focus") {
@@ -1391,12 +1408,13 @@ function updateDisplayMode(event) {
 }
 
 const debouncedMemoHistory = debounce(() => pushHistory(), 600);
+const debouncedPersist = debounce(() => persistState(), 300);
 
 function updateMemo(event) {
   debouncedMemoHistory();
   state.memo = event.target.value;
   markDirty();
-  persistState();
+  debouncedPersist();
 }
 
 function updateReplacement(event) {
@@ -1408,11 +1426,20 @@ function updateReplacement(event) {
 }
 
 function skipStudent() {
+  const skippedId = state.currentId;
   state.currentId = null;
-  pickStudent();
+  pickStudent(skippedId);
 }
 
 function toCsv() {
+  // Pre-group call log by student ID to avoid O(n²) scans inside the map.
+  const logByStudent = new Map();
+  for (const entry of state.callLog) {
+    if (entry.outcome === null) continue;
+    if (!logByStudent.has(entry.studentId)) logByStudent.set(entry.studentId, []);
+    logByStudent.get(entry.studentId).push(entry);
+  }
+
   const rows = [
     [
       "id",
@@ -1431,7 +1458,7 @@ function toCsv() {
       "cycle_number",
     ],
     ...state.students.map((s) => {
-      const log = state.callLog.filter((e) => e.studentId === s.id && e.outcome !== null);
+      const log = logByStudent.get(s.id) || [];
       const correct = log.filter((e) => e.outcome === "correct").length;
       const incorrect = log.filter((e) => e.outcome === "incorrect").length;
       const pass = log.filter((e) => e.outcome === "pass").length;
@@ -1479,13 +1506,15 @@ function showLoadSessionDialog() {
       dlg.close();
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKeydown);
       resolve(value || null);
     };
     const onOk = () => finish(input.value.trim());
     const onCancel = () => finish(null);
+    const onKeydown = (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); };
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); }, { once: false });
+    input.addEventListener('keydown', onKeydown);
     dlg.showModal();
     input.focus();
   });
@@ -1761,14 +1790,14 @@ function init() {
     debouncedClassHistory();
     state.defaults.className = elements.defaultClassName.value.trim();
     markDirty();
-    persistState();
+    debouncedPersist();
   });
   const debouncedPeriodHistory = debounce(() => pushHistory(), 600);
   elements.defaultPeriod.addEventListener("input", () => {
     debouncedPeriodHistory();
     state.defaults.period = elements.defaultPeriod.value.trim();
     markDirty();
-    persistState();
+    debouncedPersist();
   });
   elements.classroomSignIn.addEventListener("click", classroomSignIn);
   elements.classroomSignOut.addEventListener("click", classroomSignOut);
@@ -1825,18 +1854,7 @@ function init() {
   loadCollapseState();
   document.getElementById("collapseRoster")?.addEventListener("click", () => toggleCollapse("rosterPanel", "collapseRoster"));
   document.getElementById("collapseClassList")?.addEventListener("click", () => toggleCollapse("classListPanel", "collapseClassList"));
-  document.getElementById("collapseAddStudent")?.addEventListener("click", () => {
-    const body = document.getElementById("addStudentBody");
-    const btn = document.getElementById("collapseAddStudent");
-    if (!body) return;
-    const isCollapsed = body.classList.toggle("collapsed");
-    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
-    try {
-      const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
-      saved["addStudentBody"] = isCollapsed;
-      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(saved));
-    } catch {}
-  });
+  document.getElementById("collapseAddStudent")?.addEventListener("click", () => toggleCollapse("addStudentBody", "collapseAddStudent"));
   const fullscreenBtn = document.getElementById("fullscreenBtn");
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener("click", () => {
