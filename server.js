@@ -20,10 +20,33 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 let appConfig = {};
 try { appConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); } catch (_) {}
 
-const makeId = () =>
-  typeof randomUUID === "function"
-    ? randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const adjectives = [
+  "bold","brave","bright","calm","clever","cold","cool","crisp","daring","dark",
+  "eager","fair","fast","fierce","fleet","fond","free","fresh","glad","golden",
+  "grand","green","happy","hardy","hazy","humble","icy","iron","ivory","jolly",
+  "keen","kind","lively","lone","loud","lucky","merry","mighty","misty","noble",
+  "pale","plain","proud","quick","quiet","rapid","rare","royal","rusty","sage",
+  "sharp","shy","silent","silver","sleek","slim","small","snowy","soft","steady",
+  "steep","still","stout","super","swift","tall","tame","tidy","true","twin",
+  "vast","vivid","warm","wary","wild","wise","witty","young","zany","zen"
+];
+const nouns = [
+  "ant","ape","bass","bat","bear","bee","bird","bison","boar","buck",
+  "cat","clam","cod","colt","cow","crab","crane","crow","deer","dog",
+  "dove","duck","eel","elk","emu","fawn","finch","fish","fly","fox",
+  "frog","goat","goose","gull","hare","hawk","hen","hog","horse","ibis",
+  "jay","kite","lark","lion","lynx","mare","mink","mole","moth","mouse",
+  "mule","newt","oat","orca","oryx","otter","owl","ox","panda","perch",
+  "pig","pike","plum","pony","quail","ram","ray","robin","rook","seal",
+  "shark","sheep","sloth","slug","snail","snake","squid","stag","stork","swan",
+  "teal","tiger","toad","trout","vole","wasp","whale","wolf","wren","yak"
+];
+const makeId = () => {
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const num = Math.floor(Math.random() * 900) + 100;
+  return `${adj}-${noun}-${num}`;
+};
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
