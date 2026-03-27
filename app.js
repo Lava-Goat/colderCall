@@ -42,8 +42,10 @@ const elements = {
   importDb: document.getElementById("importDb"),
   importDbFile: document.getElementById("importDbFile"),
   exportCycleCsv: document.getElementById("exportCycleCsv"),
+  saveServer: document.getElementById("saveServer"),
   loadServer: document.getElementById("loadServer"),
-  serverStatus: document.getElementById("serverStatus"),
+  sessionName: document.getElementById("sessionName"),
+  newSession: document.getElementById("newSession"),
   cycleInfo: document.getElementById("cycleInfo"),
   undoButton: document.getElementById("undoButton"),
   popOut: document.getElementById("popOut"),
@@ -198,7 +200,6 @@ function loadState() {
 
 function markDirty() {
   unsavedChanges = true;
-  renderServerSaveStatus();
 }
 
 function undoLastChange() {
@@ -1122,22 +1123,11 @@ function createGroupFromClass() {
   renderStudents();
 }
 
-function setServerStatus(message, tone = "muted") {
-  if (!elements.serverStatus) return;
-  const toneClass =
-    tone === "success" ? "success" : tone === "danger" ? "danger" : tone === "warn" ? "warn" : "muted";
-  elements.serverStatus.textContent = message;
-  elements.serverStatus.className = `pill ${toneClass}`;
-}
-
-function renderServerSaveStatus() {
-  const statusText = state.sessionId
-    ? unsavedChanges
-      ? `Unsaved changes · last saved ${state.sessionId}`
-      : `Saved on server · ${state.sessionId}`
-    : "Not saved to server";
-  const tone = unsavedChanges ? "warn" : state.sessionId ? "success" : "muted";
-  setServerStatus(statusText, tone);
+function renderSessionName() {
+  if (!elements.sessionName) return;
+  const name = state.sessionId || "Unsaved session";
+  elements.sessionName.textContent = name;
+  elements.sessionName.className = `pill ${state.sessionId ? "success" : "muted"}`;
 }
 
 function renderCycleInfo() {
@@ -1165,7 +1155,7 @@ function render() {
   elements.defaultClassName.value = state.defaults.className;
   elements.defaultPeriod.value = state.defaults.period;
   elements.pickStudent.disabled = !state.students.length;
-  renderServerSaveStatus();
+  renderSessionName();
   renderCycleInfo();
 }
 
@@ -1279,6 +1269,55 @@ function clearRoster() {
   markDirty();
   persistState();
   render();
+}
+
+function showNewSessionDialog() {
+  return new Promise((resolve) => {
+    const dlg = document.getElementById("newSessionDialog");
+    const clearBox = document.getElementById("newSessionClearRoster");
+    const okBtn = document.getElementById("newSessionOk");
+    const cancelBtn = document.getElementById("newSessionCancel");
+    clearBox.checked = false;
+    const finish = (confirmed) => {
+      dlg.close();
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      resolve(confirmed ? { clearRoster: clearBox.checked } : null);
+    };
+    const onOk = () => finish(true);
+    const onCancel = () => finish(false);
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    dlg.showModal();
+    okBtn.focus();
+  });
+}
+
+async function newSession() {
+  const result = await showNewSessionDialog();
+  if (!result) return;
+  pushHistory();
+  state.sessionId = null;
+  state.cycleNumber = 1;
+  state.memo = "";
+  state.memoHistory = [];
+  state.callLog = [];
+  state.currentId = null;
+  if (result.clearRoster) {
+    state.students = [];
+    state.groups = [];
+  } else {
+    state.students = state.students.map((s) => ({
+      ...s,
+      calledThisCycle: false,
+      status: "pending",
+      calls: 0,
+    }));
+  }
+  markDirty();
+  persistState();
+  render();
+  saveToServer();
 }
 
 function addSingleStudent() {
@@ -1559,7 +1598,6 @@ async function loadFromServer() {
   const id = await showLoadSessionDialog();
   if (!id) return;
   elements.loadServer.disabled = true;
-  setServerStatus("Loading…", "warn");
   try {
     const response = await fetch(`/api/session/${encodeURIComponent(id.trim())}`);
     if (!response.ok) {
@@ -1594,10 +1632,8 @@ async function loadFromServer() {
     unsavedChanges = false;
     persistState();
     render();
-    setServerStatus(`Loaded · ${data.sessionId}`, "success");
   } catch (error) {
     console.error("Load failed", error);
-    setServerStatus("Load failed", "danger");
     alert(`Unable to load session: ${error.message}`);
   } finally {
     elements.loadServer.disabled = false;
@@ -1672,6 +1708,42 @@ function exportCycleCsv() {
   downloadFile(`colderCall-cycle${state.cycleNumber}.csv`, csv, "text/csv");
 }
 
+async function saveToServer() {
+  if (elements.saveServer) elements.saveServer.disabled = true;
+  try {
+    const response = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        memo: state.memo,
+        displayMode: state.displayMode,
+        withReplacement: state.withReplacement,
+        students: state.students,
+        cycleNumber: state.cycleNumber,
+        memoHistory: state.memoHistory,
+        carryMemo: state.carryMemo,
+        defaults: state.defaults,
+        groups: state.groups,
+        callLog: state.callLog,
+      }),
+    });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "Request failed");
+    }
+    const payload = await response.json();
+    state.sessionId = payload.sessionId;
+    unsavedChanges = false;
+    persistState();
+    render();
+  } catch (error) {
+    console.error("Save failed", error);
+  } finally {
+    if (elements.saveServer) elements.saveServer.disabled = false;
+  }
+}
+
 async function exportDatabase() {
   elements.exportDb.disabled = true;
   try {
@@ -1698,7 +1770,6 @@ async function importDatabase(file) {
   form.append("file", file);
 
   elements.importDb.disabled = true;
-  setServerStatus("Importing database…", "warn");
   try {
     const response = await fetch("/api/db/import", { method: "POST", body: form });
     if (!response.ok) {
@@ -1707,7 +1778,6 @@ async function importDatabase(file) {
     }
     const { sessions, latestSessionId } = await response.json();
     localStorage.removeItem(storageKey);
-    setServerStatus(`Database imported (${sessions} session${sessions !== 1 ? "s" : ""})`, "success");
     if (latestSessionId) {
       const r = await fetch(`/api/session/${encodeURIComponent(latestSessionId)}`);
       if (r.ok) {
@@ -1738,14 +1808,12 @@ async function importDatabase(file) {
         unsavedChanges = false;
         persistState();
         render();
-        setServerStatus(`Database imported · ${latestSessionId}`, "success");
         return;
       }
     }
     location.reload();
   } catch (err) {
     console.error("DB import failed", err);
-    setServerStatus("Import failed", "danger");
     alert("Import failed: " + err.message);
   } finally {
     elements.importDb.disabled = false;
@@ -1919,7 +1987,9 @@ function init() {
   elements.importDb.addEventListener("click", () => elements.importDbFile.click());
   elements.importDbFile.addEventListener("change", (e) => importDatabase(e.target.files[0]));
   elements.exportCycleCsv.addEventListener("click", exportCycleCsv);
+  elements.saveServer.addEventListener("click", saveToServer);
   elements.loadServer.addEventListener("click", loadFromServer);
+  elements.newSession.addEventListener("click", newSession);
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
   loadCollapseState();
   document.getElementById("collapseRoster")?.addEventListener("click", () => toggleCollapse("rosterPanel", "collapseRoster"));

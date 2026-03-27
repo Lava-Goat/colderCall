@@ -13,14 +13,16 @@
       <h1>colderCall</h1>
     </div>
     <div class="actions-row">
-      <p id="serverStatus" class="pill muted">Not saved to server</p>
+      <p id="sessionName" class="pill muted">Unsaved session</p>
       <p id="cycleInfo" class="pill info">Cycle 1</p>
       <button id="themeToggle" class="ghost icon-btn" title="Toggle dark mode">☀️</button>
+      <button id="newSession" class="ghost">New session</button>
       <button id="exportCsv" class="ghost">Export CSV</button>
       <button id="exportDb" class="ghost">Save database</button>
       <button id="importDb" class="ghost">Load database</button>
       <input type="file" id="importDbFile" accept=".sqlite,.db,application/octet-stream" style="display:none">
       <button id="exportCycleCsv" class="primary">Export cycle CSV</button>
+      <button id="saveServer" class="ghost">Save to server</button>
       <button id="loadServer" class="ghost">Load session</button>
     </div>
   </header>
@@ -259,6 +261,18 @@
     <div style="display:flex;justify-content:flex-end;gap:10px;">
       <button id="loadSessionCancel" class="ghost">Cancel</button>
       <button id="loadSessionOk" class="primary">Load</button>
+    </div>
+  </dialog>
+
+  <dialog id="newSessionDialog" style="border:none;border-radius:12px;padding:28px 32px;min-width:340px;background:var(--panel,#fff);color:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+    <p style="margin:0 0 14px;font-weight:600;font-size:1rem;">New session</p>
+    <p style="margin:0 0 14px;font-size:.875rem;opacity:.7;">This will reset the cycle, memo, and call log.</p>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:.875rem;cursor:pointer;">
+      <input id="newSessionClearRoster" type="checkbox" /> Also clear roster
+    </label>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button id="newSessionCancel" class="ghost">Cancel</button>
+      <button id="newSessionOk" class="primary">Start new session</button>
     </div>
   </dialog>
 
