@@ -41,7 +41,7 @@ const elements = {
   exportDb: document.getElementById("exportDb"),
   importDb: document.getElementById("importDb"),
   importDbFile: document.getElementById("importDbFile"),
-  saveServer: document.getElementById("saveServer"),
+  exportCycleCsv: document.getElementById("exportCycleCsv"),
   loadServer: document.getElementById("loadServer"),
   serverStatus: document.getElementById("serverStatus"),
   cycleInfo: document.getElementById("cycleInfo"),
@@ -124,6 +124,12 @@ function randomId() {
     : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+// Strip legacy UUID-format session IDs (server now uses adjective-noun IDs)
+function sanitizeSessionId(id) {
+  if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(id)) return null;
+  return id || null;
+}
+
 function snapshotState() {
   return JSON.parse(
     JSON.stringify({
@@ -172,7 +178,7 @@ function loadState() {
     state.withReplacement = Boolean(data.withReplacement);
     state.displayMode = data.displayMode || "full";
     state.memo = data.memo || "";
-    state.sessionId = data.sessionId || null;
+    state.sessionId = sanitizeSessionId(data.sessionId);
     state.memoHistory = Array.isArray(data.memoHistory) ? data.memoHistory : [];
     state.cycleNumber = Number.isInteger(data.cycleNumber) ? data.cycleNumber : 1;
     state.carryMemo = Boolean(data.carryMemo);
@@ -1584,7 +1590,7 @@ async function loadFromServer() {
     state.groups = Array.isArray(data.groups) ? data.groups : [];
     state.callLog = Array.isArray(data.callLog) ? data.callLog : [];
     state.activeFilter = { type: "all" };
-    state.sessionId = data.sessionId;
+    state.sessionId = sanitizeSessionId(data.sessionId);
     unsavedChanges = false;
     persistState();
     render();
@@ -1598,44 +1604,72 @@ async function loadFromServer() {
   }
 }
 
-async function saveToServer() {
-  elements.saveServer.disabled = true;
-  setServerStatus("Saving to server…", "warn");
-  try {
-    const response = await fetch("/api/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: state.sessionId,
-        memo: state.memo,
-        displayMode: state.displayMode,
-        withReplacement: state.withReplacement,
-        students: state.students,
-        cycleNumber: state.cycleNumber,
-        memoHistory: state.memoHistory,
-        carryMemo: state.carryMemo,
-        defaults: state.defaults,
-        groups: state.groups,
-        callLog: state.callLog,
-      }),
-    });
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || "Request failed");
-    }
-    const payload = await response.json();
-    state.sessionId = payload.sessionId;
-    unsavedChanges = false;
-    persistState();
-    setServerStatus(`Saved on server · ${state.sessionId}`, "success");
-    render();
-  } catch (error) {
-    console.error("Save failed", error);
-    setServerStatus("Save to server failed", "danger");
-    alert("Unable to save to server. Make sure the server is running.");
-  } finally {
-    elements.saveServer.disabled = false;
+function exportCycleCsv() {
+  const cycleLog = state.callLog.filter(
+    (e) => e.cycleNumber === state.cycleNumber && e.outcome !== null
+  );
+  const calledIds = new Set(cycleLog.map((e) => e.studentId));
+  const calledStudents = state.students.filter((s) => calledIds.has(s.id));
+
+  const logByStudent = new Map();
+  for (const entry of cycleLog) {
+    if (!logByStudent.has(entry.studentId)) logByStudent.set(entry.studentId, []);
+    logByStudent.get(entry.studentId).push(entry);
   }
+
+  const rows = [
+    [
+      "id",
+      "full_name",
+      "first_name",
+      "last_name",
+      "class_name",
+      "period",
+      "status",
+      "calls",
+      "correct",
+      "incorrect",
+      "pass",
+      "pct_correct",
+      "memo",
+      "cycle_number",
+    ],
+    ...calledStudents.map((s) => {
+      const log = logByStudent.get(s.id) || [];
+      const correct = log.filter((e) => e.outcome === "correct").length;
+      const incorrect = log.filter((e) => e.outcome === "incorrect").length;
+      const pass = log.filter((e) => e.outcome === "pass").length;
+      const answered = correct + incorrect;
+      const pctCorrect = answered > 0 ? ((correct / answered) * 100).toFixed(1) : "";
+      return [
+        s.id,
+        s.fullName,
+        s.firstName,
+        s.lastName,
+        s.className || "",
+        s.period || "",
+        s.status,
+        log.length,
+        correct,
+        incorrect,
+        pass,
+        pctCorrect,
+        state.memo || "",
+        state.cycleNumber,
+      ];
+    }),
+  ];
+  const csv = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = cell == null ? "" : String(cell);
+          return `"${value.replace(/"/g, '""')}"`;
+        })
+        .join(",")
+    )
+    .join("\n");
+  downloadFile(`colderCall-cycle${state.cycleNumber}.csv`, csv, "text/csv");
 }
 
 async function exportDatabase() {
@@ -1700,7 +1734,7 @@ async function importDatabase(file) {
         state.groups = Array.isArray(data.groups) ? data.groups : [];
         state.callLog = Array.isArray(data.callLog) ? data.callLog : [];
         state.activeFilter = { type: "all" };
-        state.sessionId = data.sessionId;
+        state.sessionId = sanitizeSessionId(data.sessionId);
         unsavedChanges = false;
         persistState();
         render();
@@ -1884,7 +1918,7 @@ function init() {
   elements.exportDb.addEventListener("click", exportDatabase);
   elements.importDb.addEventListener("click", () => elements.importDbFile.click());
   elements.importDbFile.addEventListener("change", (e) => importDatabase(e.target.files[0]));
-  elements.saveServer.addEventListener("click", saveToServer);
+  elements.exportCycleCsv.addEventListener("click", exportCycleCsv);
   elements.loadServer.addEventListener("click", loadFromServer);
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
   loadCollapseState();
